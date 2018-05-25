@@ -6,7 +6,7 @@
 
 (define-hash-table-test 'ofc-kv-map-cmp-func (lambda (a b)
                                                (string= a b)) 'sxhash)
-(defvar ofc-candidates-map (make-hash-table :test 'ofc-kv-map-cmp-func))
+(defvar g-filename2hash (make-hash-table :test 'ofc-kv-map-cmp-func))
 
 (defun buffer-whole-string (buffer)
   (with-current-buffer buffer
@@ -21,26 +21,30 @@
 (defun company-ofc-buffer-ok ()
   (member major-mode '(c-mode c++-mode emacs-lisp-mode)))
 
-(defun company-ofc-make-cache (buffer)
+(defun company-ofc-make-cache (buffer buffer-hash)
   (for-each-word-in-buffer buffer
                            company-ofc-word-separator
                            (lambda (word)
                              (if (>= (length word) company-ofc-min-word-len)
                                  (let ((key (downcase word)))
-                                   (let ((word-list (gethash key ofc-candidates-map nil)))
+                                   (let ((word-list (gethash key buffer-hash nil)))
                                      (if (not word-list)
-                                         (puthash key (list word) ofc-candidates-map)
+                                         (puthash key (list word) buffer-hash)
                                        (when (not (member word word-list))
                                          (add-to-list 'word-list word)
-                                         (puthash key word-list ofc-candidates-map)))))))))
+                                         (puthash key word-list buffer-hash)))))))))
 
 (defun company-ofc-init ()
   (if (company-ofc-buffer-ok)
-      (company-ofc-make-cache (current-buffer))))
+      (let ((file-hash (make-hash-table :test 'ofc-kv-map-cmp-func))
+            (file-name (buffer-file-name)))
+        (company-ofc-make-cache (current-buffer) file-hash)
+        (puthash file-name file-hash g-filename2hash))))
 
-(add-hook 'after-save-hook (lambda ()
-                             (if (company-ofc-buffer-ok)
-                                 (company-ofc-make-cache (current-buffer)))))
+(add-hook 'after-save-hook 'company-ofc-init) ;; rewrite the whole file after saving
+
+(add-hook 'kill-buffer-hook (lambda ()
+                              (remhash (buffer-file-name) g-filename2hash)))
 
 (defun company-ofc-fuzzy-match-word (input word)
   (let ((input-length (length input))
@@ -58,10 +62,15 @@
   (if (and (>= (length input) company-ofc-min-word-len)
            (company-ofc-buffer-ok))
       (let ((result '()))
-        (maphash (lambda (word word-list)
-                   (when (company-ofc-fuzzy-match-word (downcase input) word)
-                     (mapcar (lambda (c) (add-to-list 'result c)) word-list)))
-                 ofc-candidates-map)
+        (maphash (lambda (file-name file-hash)
+                   (maphash (lambda (word word-list)
+                              (when (company-ofc-fuzzy-match-word (downcase input) word)
+                                (mapcar (lambda (candidate)
+                                          (if (not (member candidate result))
+                                              (add-to-list 'result candidate)))
+                                        word-list)))
+                            file-hash))
+                 g-filename2hash)
         result)))
 
 (defun company-ofc (command &optional arg &rest ignored)
