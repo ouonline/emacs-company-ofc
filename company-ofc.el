@@ -8,7 +8,7 @@
                                                (string= a b)) 'sxhash)
 (defvar g-filename2hash (make-hash-table :test 'ofc-kv-map-cmp-func))
 
-(defun buffer-whole-string (buffer)
+(defun buffer2string (buffer)
   (with-current-buffer buffer
     (save-restriction
       (widen)
@@ -16,7 +16,7 @@
 
 (defun for-each-word-in-buffer (buffer separator word-callback-func)
   (mapcar word-callback-func
-          (split-string (buffer-whole-string buffer) separator t)))
+          (split-string (buffer2string buffer) separator t)))
 
 (defun company-ofc-buffer-p ()
   (member major-mode '(c-mode c++-mode emacs-lisp-mode)))
@@ -40,7 +40,7 @@
         (company-ofc-make-cache (current-buffer) file-hash)
         (puthash file-name file-hash g-filename2hash))))
 
-(add-hook 'after-save-hook 'company-ofc-init) ;; rewrite the whole file after saving
+(add-hook 'after-save-hook 'company-ofc-init) ;; rewrite the file hash after saving
 
 (add-hook 'kill-buffer-hook (lambda ()
                               (remhash (buffer-file-name) g-filename2hash)))
