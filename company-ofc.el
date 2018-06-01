@@ -12,7 +12,7 @@
 (cl-defstruct candidate-s word freq)
 
 (defun company-ofc-buffer-p ()
-  (member major-mode '(c-mode c++-mode emacs-lisp-mode)))
+  (member major-mode '(c-mode c++-mode)))
 
 (defun find-candidate-in-list (word candidate-list)
   (if (null candidate-list)
@@ -38,7 +38,7 @@
       (if (not candidate-list)
           (puthash key (list (make-candidate-s :word word :freq freq)) file-hash)
         (when (not (find-candidate-in-list word candidate-list))
-          (add-to-list 'candidate-list (make-candidate-s :word word :freq freq))
+          (setq candidate-list (cons (make-candidate-s :word word :freq freq) candidate-list))
           (puthash key candidate-list file-hash))))))
 
 (defun make-hash-for-buffer (buffer file-hash)
@@ -96,40 +96,33 @@
         (cl-incf ith))
       (= state input-length))))
 
+(setq g-candidate-list '())
+
 (defun company-ofc-find-candidate (input)
+  (setq g-candidate-list '())
   (let ((input-length (length input)))
     (if (and (>= input-length company-ofc-min-word-len)
              (company-ofc-buffer-p))
-        (let ((res-candidate-list '())
-              (downcased-input (downcase input)))
+        (let ((downcased-input (downcase input)))
           (maphash (lambda (file-name file-hash)
                      (maphash (lambda (word candidate-list)
                                 (let ((word-length (length word)))
                                   (if (do-fuzzy-compare downcased-input input-length
                                                         word word-length)
-                                      (mapcar (lambda (candidate)
-                                                (let ((c (find-candidate-in-list (candidate-s-word candidate)
-                                                                                 res-candidate-list)))
-                                                  (when (not c)
-                                                    (add-to-list 'res-candidate-list candidate))))
-                                              candidate-list))))
+                                      (setq g-candidate-list (append candidate-list g-candidate-list)))))
                               file-hash))
                    g-filename2hash)
           ;; sort candidates according to freq
-          (let ((sorted-candidates (sort res-candidate-list
-                                         (lambda (a b)
-                                           (> (candidate-s-freq a) (candidate-s-freq b))))))
-            (mapcar 'candidate-s-word sorted-candidates))))))
+          (setq g-candidate-list (sort g-candidate-list
+                                       (lambda (a b)
+                                         (> (candidate-s-freq a) (candidate-s-freq b)))))
+          (delete-dups (mapcar 'candidate-s-word g-candidate-list))))))
 
-;; because we cannot tell which hash this candidate is from, we increment its freq in each hash
 (defun company-ofc-update-word-freq (word)
-  (maphash (lambda (file-name file-hash)
-             (let ((candidate-list (gethash (downcase word) file-hash nil)))
-               (if candidate-list
-                   (let ((candidate (find-candidate-in-list word candidate-list)))
-                     (if candidate
-                         (cl-incf (candidate-s-freq candidate)))))))
-           g-filename2hash))
+  (mapcar (lambda (candidate)
+            (if (string= word (candidate-s-word candidate))
+                (cl-incf (candidate-s-freq candidate))))
+          g-candidate-list))
 
 (defun company-ofc (command &optional arg &rest ignored)
   (interactive (list 'interactive))
