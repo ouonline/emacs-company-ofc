@@ -10,9 +10,6 @@
 
 (cl-defstruct candidate-s word freq desc)
 
-(defun company-ofc-buffer-p ()
-  (member major-mode '(c-mode c++-mode)))
-
 (defun find-candidate-in-list (word candidate-list)
   (if (null candidate-list)
       nil
@@ -57,11 +54,10 @@
                                    (add-word-to-hash word 0 desc file-hash))))))
 
 (defun company-ofc-init ()
-  (if (company-ofc-buffer-p)
-      (let ((file-hash (make-hash-table :test 'ofc-kv-map-cmp-func))
-            (file-path (buffer-file-name)))
-        (make-hash-for-buffer file-path (current-buffer) file-hash)
-        (puthash file-path file-hash g-filename2hash))))
+  (let ((file-hash (make-hash-table :test 'ofc-kv-map-cmp-func))
+        (file-path (buffer-file-name)))
+    (make-hash-for-buffer file-path (current-buffer) file-hash)
+    (puthash file-path file-hash g-filename2hash)))
 
 (defun update-buffer-hash (buffer file-path old-file-hash new-file-hash)
   (let ((word-desc (concat "[" (file-name-nondirectory file-path) "]")))
@@ -81,18 +77,16 @@
 
 (add-hook 'after-save-hook
           (lambda ()
-            (if (company-ofc-buffer-p)
-                (let ((file-path (buffer-file-name)))
-                  (let ((old-file-hash (gethash file-path g-filename2hash nil)))
-                    (if (not old-file-hash)
-                        (company-ofc-init)
-                      (let ((new-file-hash (make-hash-table :test 'ofc-kv-map-cmp-func)))
-                        (update-buffer-hash (current-buffer) file-path old-file-hash new-file-hash)
-                        (puthash file-path new-file-hash g-filename2hash))))))))
+            (let ((file-path (buffer-file-name)))
+              (let ((old-file-hash (gethash file-path g-filename2hash nil)))
+                (if (not old-file-hash)
+                    (company-ofc-init)
+                  (let ((new-file-hash (make-hash-table :test 'ofc-kv-map-cmp-func)))
+                    (update-buffer-hash (current-buffer) file-path old-file-hash new-file-hash)
+                    (puthash file-path new-file-hash g-filename2hash)))))))
 
 (add-hook 'kill-buffer-hook (lambda ()
-                              (if (company-ofc-buffer-p)
-                                  (remhash (buffer-file-name) g-filename2hash))))
+                              (remhash (buffer-file-name) g-filename2hash)))
 
 (defun do-fuzzy-compare (input input-length word word-length)
   (if (> input-length word-length)
@@ -116,8 +110,7 @@
 (defun company-ofc-find-candidate (input)
   (setq g-candidate-list '())
   (let ((input-length (length input)))
-    (if (and (>= input-length company-ofc-min-word-len)
-             (company-ofc-buffer-p))
+    (if (>= input-length company-ofc-min-word-len)
         (let ((downcased-input (downcase input)))
           (maphash (lambda (file-path file-hash)
                      (maphash (lambda (word candidate-list)

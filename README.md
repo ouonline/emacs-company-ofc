@@ -5,8 +5,9 @@ This is a fuzzy completion backend for [company-mode](https://github.com/company
 # Installation
 
 ```lisp
-;; other company mode settings here
-(add-to-list 'load-path "~/.emacs.d/company-ofc/")
-(require 'company-ofc)
+;; company mode settings here, for example:
+;; (add-hook 'prog-mode-hook (lambda () (company-mode)))
+
+(add-to-list 'load-path "/path/to/emacs-company-ofc/")
 (add-to-list 'company-backends 'company-ofc)
 ```
