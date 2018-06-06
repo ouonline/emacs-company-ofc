@@ -56,8 +56,9 @@
 (defun company-ofc-init ()
   (let ((file-hash (make-hash-table :test 'ofc-kv-map-cmp-func))
         (file-path (buffer-file-name)))
-    (make-hash-for-buffer file-path (current-buffer) file-hash)
-    (puthash file-path file-hash g-filename2hash)))
+    (when file-path
+      (make-hash-for-buffer file-path (current-buffer) file-hash)
+      (puthash file-path file-hash g-filename2hash))))
 
 (defun update-buffer-hash (buffer file-path old-file-hash new-file-hash)
   (let ((word-desc (concat "[" (file-name-nondirectory file-path) "]")))
