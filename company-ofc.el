@@ -92,14 +92,14 @@
 (defun do-fuzzy-compare (input input-length word word-length)
   (if (> input-length word-length)
       nil
-    (let ((ith 0)
-          (state 0))
-      (while (and (< ith word-length)
-                  (< state input-length))
-        (if (eq (elt word ith) (elt input state))
-            (cl-incf state))
-        (cl-incf ith))
-      (= state input-length))))
+    (let ((word-idx 0)
+          (input-idx 0))
+      (while (and (< word-idx word-length)
+                  (< input-idx input-length))
+        (if (eq (elt word word-idx) (elt input input-idx))
+            (cl-incf input-idx))
+        (cl-incf word-idx))
+      (= input-idx input-length))))
 
 (setq g-candidate-list '())
 
