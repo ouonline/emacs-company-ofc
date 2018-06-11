@@ -1,7 +1,9 @@
 (require 'cl-lib)
 
-(defvar company-ofc-char-set "0-9a-zA-Z_")
-(defvar company-ofc-word-separator (concat "[^" company-ofc-char-set "]+"))
+(defvar company-ofc-word-char-set "0-9a-zA-Z_")
+(defvar company-ofc-word-delim (concat "[^" company-ofc-word-char-set "]+"))
+(defvar company-ofc-prefix-pattern (concat "[^" company-ofc-word-char-set "][" company-ofc-word-char-set "]+"))
+(defvar company-ofc-suffix-pattern (concat "[" company-ofc-word-char-set "]+"))
 (defvar company-ofc-min-word-len 4)
 
 (define-hash-table-test 'ofc-kv-map-cmp-func (lambda (a b) (string= a b)) 'sxhash)
@@ -48,7 +50,7 @@
 (defun make-hash-for-buffer (file-path file-buffer file-hash)
   (let ((desc (concat "[" (file-name-nondirectory file-path) "]")))
     (for-each-word-in-buffer file-buffer
-                             company-ofc-word-separator
+                             company-ofc-word-delim
                              (lambda (word)
                                (if (>= (length word) company-ofc-min-word-len)
                                    (add-word-to-hash word 0 desc file-hash))))))
@@ -63,7 +65,7 @@
 (defun update-buffer-hash (buffer file-path old-file-hash new-file-hash)
   (let ((word-desc (concat "[" (file-name-nondirectory file-path) "]")))
     (for-each-word-in-buffer buffer
-                             company-ofc-word-separator
+                             company-ofc-word-delim
                              (lambda (word)
                                (let ((old-candidate-list (gethash (downcase word) old-file-hash nil)))
                                  (if old-candidate-list
@@ -127,20 +129,47 @@
                                          (> (candidate-s-freq a) (candidate-s-freq b)))))
           (delete-dups (mapcar 'candidate-s-word g-candidate-list))))))
 
-(defun company-ofc-update-word-freq (word)
-  (mapcar (lambda (candidate)
-            (if (string= word (candidate-s-word candidate))
-                (cl-incf (candidate-s-freq candidate))))
-          g-candidate-list))
+(defun company-ofc-grab-suffix ()
+  (let ((begin-position (point))
+        (line-end-pos (line-end-position)))
+    (if (re-search-forward company-ofc-suffix-pattern line-end-pos t)
+        (let ((end-position (point)))
+          (goto-char begin-position)
+          (buffer-substring-no-properties begin-position end-position))
+      (buffer-substring-no-properties begin-position line-end-pos))))
+
+(defun company-ofc-grab-prefix ()
+  (let ((line-begin-pos (line-beginning-position))
+        (end-position (point)))
+    (if (re-search-backward company-ofc-prefix-pattern line-begin-pos t)
+        (let ((begin-position (+ (point) 1))) ;; skip delim
+          (goto-char end-position)
+          (buffer-substring-no-properties begin-position end-position))
+      (buffer-substring-no-properties line-begin-pos end-position))))
+
+(defun company-ofc-post-completion (word)
+  (defun post-completion-helper (func)
+    (mapcar (lambda (candidate)
+              (if (string= word (candidate-s-word candidate))
+                  (funcall func candidate)))
+            g-candidate-list))
+  (let ((suffix (company-ofc-grab-suffix)))
+    (if (string-suffix-p (downcase suffix) (downcase word))
+        (let ((suffix-len (length suffix)))
+          (post-completion-helper (lambda (candidate)
+                                    (cl-incf (candidate-s-freq candidate))
+                                    (delete-char suffix-len))))
+      (post-completion-helper (lambda (candidate)
+                                (cl-incf (candidate-s-freq candidate)))))))
 
 (defun company-ofc (command &optional arg &rest ignored)
   (interactive (list 'interactive))
   (cl-case command
     (init (company-ofc-init))
     ;;(interactive (company-begin-backend 'company-ofc))
-    (prefix (company-grab-symbol))
+    (prefix (company-ofc-grab-prefix))
     (candidates (company-ofc-find-candidate arg))
-    (post-completion (company-ofc-update-word-freq arg))
+    (post-completion (company-ofc-post-completion arg))
     (annotation (company-ofc-get-annotation arg))
     (sorted t) ;; tell company not to sort the result again
     (no-cache t)))
