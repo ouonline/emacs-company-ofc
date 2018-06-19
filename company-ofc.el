@@ -130,14 +130,11 @@
 
 (defun company-ofc-grab-suffix (pattern)
   (if (looking-at pattern)
-      (match-string 0)
-    (buffer-substring-no-properties (point) (line-end-position))))
+      (match-string 0)))
 
 (defun company-ofc-grab-prefix (pattern)
-  (let ((line-begin-pos (line-beginning-position)))
-    (if (looking-back pattern line-begin-pos t)
-        (match-string 0)
-      (buffer-substring-no-properties line-begin-pos (point)))))
+  (if (looking-back pattern (line-beginning-position) t)
+      (match-string 0)))
 
 (defun company-ofc-post-completion (word)
   (defun post-completion-helper (func)
@@ -146,7 +143,8 @@
                   (funcall func candidate)))
             g-candidate-list))
   (let ((suffix (company-ofc-grab-suffix company-ofc-word-pattern)))
-    (if (string-suffix-p (downcase suffix) (downcase word))
+    (if (and suffix
+             (string-suffix-p (downcase suffix) (downcase word)))
         (let ((suffix-len (length suffix)))
           (post-completion-helper (lambda (candidate)
                                     (cl-incf (candidate-s-freq candidate))
