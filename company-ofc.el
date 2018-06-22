@@ -1,15 +1,27 @@
 (require 'cl-lib)
 
-(defvar company-ofc-word-char-set "0-9a-zA-Z_")
-(defvar company-ofc-word-pattern (concat "[" company-ofc-word-char-set "]+"))
-(defvar company-ofc-word-delim (concat "[^" company-ofc-word-char-set "]+"))
-(defvar company-ofc-min-word-len 4)
+;; -----------------------------------------------------------------------------
+;; constants
+
+(setq company-ofc-word-char-set "0-9a-zA-Z_")
+(setq company-ofc-word-pattern (concat "[" company-ofc-word-char-set "]+"))
+(setq company-ofc-word-delim (concat "[^" company-ofc-word-char-set "]+"))
+(setq company-ofc-min-word-len 4)
+
+;; -----------------------------------------------------------------------------
+;; variables used across functions
 
 (define-hash-table-test 'ofc-kv-map-cmp-func (lambda (a b) (string= a b)) 'sxhash)
+(setq g-filename2hash (make-hash-table :test 'ofc-kv-map-cmp-func))
 
-(defvar g-filename2hash (make-hash-table :test 'ofc-kv-map-cmp-func))
+(setq g-candidate-list '())
+
+;; -----------------------------------------------------------------------------
+;; typedef
 
 (cl-defstruct candidate-s word freq desc)
+
+;; -----------------------------------------------------------------------------
 
 (defun find-candidate-in-list (word candidate-list)
   (if (null candidate-list)
@@ -51,8 +63,8 @@
     (for-each-word-in-buffer file-buffer
                              company-ofc-word-delim
                              (lambda (word)
-                               (if (>= (length word) company-ofc-min-word-len)
-                                   (add-word-to-hash word 0 desc file-hash))))))
+                               (when (>= (length word) company-ofc-min-word-len)
+                                 (add-word-to-hash word 0 desc file-hash))))))
 
 (defun company-ofc-init ()
   (let ((file-hash (make-hash-table :test 'ofc-kv-map-cmp-func))
@@ -97,60 +109,56 @@
           (input-idx 0))
       (while (and (< word-idx word-length)
                   (< input-idx input-length))
-        (if (eq (elt word word-idx) (elt input input-idx))
-            (cl-incf input-idx))
+        (when (eq (elt word word-idx) (elt input input-idx))
+          (cl-incf input-idx))
         (cl-incf word-idx))
       (= input-idx input-length))))
 
-(setq g-candidate-list '())
-
 (defun company-ofc-get-annotation (word)
   (let ((c (find-candidate-in-list word g-candidate-list)))
-    (if c
-        (candidate-s-desc c))))
+    (when c
+      (candidate-s-desc c))))
 
 (defun company-ofc-find-candidate (input)
   (setq g-candidate-list '())
   (let ((input-length (length input)))
-    (if (>= input-length company-ofc-min-word-len)
-        (let ((downcased-input (downcase input)))
-          (maphash (lambda (file-path file-hash)
-                     (maphash (lambda (word candidate-list)
-                                (let ((word-length (length word)))
-                                  (if (do-fuzzy-compare downcased-input input-length
+    (when (>= input-length company-ofc-min-word-len)
+      (let ((downcased-input (downcase input)))
+        (maphash (lambda (file-path file-hash)
+                   (maphash (lambda (word candidate-list)
+                              (let ((word-length (length word)))
+                                (when (do-fuzzy-compare downcased-input input-length
                                                         word word-length)
-                                      (setq g-candidate-list (append candidate-list g-candidate-list)))))
-                              file-hash))
-                   g-filename2hash)
-          ;; sort candidates according to freq
-          (setq g-candidate-list (sort g-candidate-list
-                                       (lambda (a b)
-                                         (> (candidate-s-freq a) (candidate-s-freq b)))))
-          (delete-dups (mapcar 'candidate-s-word g-candidate-list))))))
+                                  (setq g-candidate-list (append candidate-list g-candidate-list)))))
+                            file-hash))
+                 g-filename2hash)
+        ;; sort candidates according to freq
+        (setq g-candidate-list (sort g-candidate-list
+                                     (lambda (a b)
+                                       (> (candidate-s-freq a) (candidate-s-freq b)))))
+        (delete-dups (mapcar 'candidate-s-word g-candidate-list))))))
 
 (defun company-ofc-grab-suffix (pattern)
-  (if (looking-at pattern)
-      (match-string 0)))
+  (when (looking-at pattern)
+    (match-string 0)))
 
 (defun company-ofc-grab-prefix (pattern)
-  (if (looking-back pattern (line-beginning-position) t)
-      (match-string 0)))
+  (when (looking-back pattern (line-beginning-position) t)
+    (match-string 0)))
 
 (defun company-ofc-post-completion (word)
-  (defun post-completion-helper (func)
-    (mapcar (lambda (candidate)
-              (if (string= word (candidate-s-word candidate))
-                  (funcall func candidate)))
-            g-candidate-list))
+  ;; update matched candidates in each file
+  (mapcar (lambda (candidate)
+            (when (string= word (candidate-s-word candidate))
+              (cl-incf (candidate-s-freq candidate))))
+          g-candidate-list)
+  ;; remove overlapping suffix
   (let ((suffix (company-ofc-grab-suffix company-ofc-word-pattern)))
-    (if (and suffix
-             (string-suffix-p (downcase suffix) (downcase word)))
-        (let ((suffix-len (length suffix)))
-          (post-completion-helper (lambda (candidate)
-                                    (cl-incf (candidate-s-freq candidate))
-                                    (delete-char suffix-len))))
-      (post-completion-helper (lambda (candidate)
-                                (cl-incf (candidate-s-freq candidate)))))))
+    (when (and suffix
+               (string-suffix-p (downcase suffix) (downcase word)))
+      (delete-char (length suffix)))))
+
+;; -----------------------------------------------------------------------------
 
 (defun company-ofc (command &optional arg &rest ignored)
   (interactive (list 'interactive))
