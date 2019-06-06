@@ -155,7 +155,7 @@
   ;; remove overlapping suffix
   (let ((suffix (company-ofc-grab-suffix company-ofc-word-pattern)))
     (when (and suffix
-               (string-suffix-p (downcase suffix) (downcase word)))
+               (do-fuzzy-compare suffix (length suffix) word (length word)))
       (delete-char (length suffix)))))
 
 ;; -----------------------------------------------------------------------------
