@@ -9,29 +9,32 @@
 (setq company-ofc-min-token-len 4)
 
 ;; -----------------------------------------------------------------------------
-;; variables used across functions
+;; struct definitions
+
+(cl-defstruct candidate-s token freq desc)
+(cl-defstruct matched-candidate-s downcased-input candidate-list)
+
+;; -----------------------------------------------------------------------------
+;; global variables
 
 (define-hash-table-test 'ofc-kv-map-cmp-func (lambda (a b) (string= a b)) 'sxhash)
 (setq g-filename2hash (make-hash-table :test 'ofc-kv-map-cmp-func))
 
-(setq g-candidate-list '())
+(setq g-matched-candidate-stack '())
 
 ;; -----------------------------------------------------------------------------
-;; typedef
 
-(cl-defstruct candidate-s token freq desc)
-
-;; -----------------------------------------------------------------------------
+(defun generic-list-find (predicate list)
+  (cl-dolist (element list)
+    (if (funcall predicate element)
+        (cl-return element))))
 
 (defun find-candidate-in-list (token candidate-list)
-  (if (null candidate-list)
-      nil
-    (let ((element (car candidate-list)))
-      (if (string= token (candidate-s-token element))
-          element
-        (find-candidate-in-list token (cdr candidate-list))))))
+  (generic-list-find (lambda (candidate)
+                       (string= token (candidate-s-token candidate)))
+                     candidate-list))
 
-;; make sure that candidate-list is not null
+;; make sure candidate-list is not null
 (defun find-or-insert-candidate-list (candidate-list token freq desc)
   (let ((candidate (car candidate-list)))
     (if (string= token (candidate-s-token candidate))
@@ -47,9 +50,9 @@
       (widen)
       (buffer-substring-no-properties (point-min) (point-max)))))
 
-(defun for-each-token-in-buffer (buffer separator token-callback-func)
-  (mapcar token-callback-func
-          (split-string (buffer2string buffer) separator t)))
+(defun for-each-token-in-buffer (buffer callback-func)
+  (dolist (token (split-string (buffer2string buffer) company-ofc-token-delim t))
+    (funcall callback-func token)))
 
 (defun add-token-to-hash (token freq desc file-hash)
   (let ((key (downcase token)))
@@ -61,7 +64,6 @@
 (defun make-hash-for-buffer (file-path file-buffer file-hash)
   (let ((desc (concat "[" (file-name-nondirectory file-path) "]")))
     (for-each-token-in-buffer file-buffer
-                              company-ofc-token-delim
                               (lambda (token)
                                 (when (>= (length token) company-ofc-min-token-len)
                                   (add-token-to-hash token 0 desc file-hash))))))
@@ -69,14 +71,15 @@
 (defun company-ofc-init ()
   (let ((file-hash (make-hash-table :test 'ofc-kv-map-cmp-func))
         (file-path (buffer-file-name)))
+    ;; each file has its own hash table
     (when file-path
       (make-hash-for-buffer file-path (current-buffer) file-hash)
       (puthash file-path file-hash g-filename2hash))))
 
 (defun update-buffer-hash (buffer file-path old-file-hash new-file-hash)
+  ;; rebuilds file hash, but keeps freq of each token
   (let ((token-desc (concat "[" (file-name-nondirectory file-path) "]")))
     (for-each-token-in-buffer buffer
-                              company-ofc-token-delim
                               (lambda (token)
                                 (let ((old-candidate-list (gethash (downcase token) old-file-hash nil)))
                                   (if old-candidate-list
@@ -91,6 +94,7 @@
 
 (add-hook 'after-save-hook
           (lambda ()
+            (setq g-matched-candidate-stack '()) ;; clear matched candidates
             (let ((file-path (buffer-file-name)))
               (let ((old-file-hash (gethash file-path g-filename2hash nil)))
                 (if (not old-file-hash)
@@ -103,6 +107,7 @@
                               (remhash (buffer-file-name) g-filename2hash)))
 
 (defun do-fuzzy-compare (pattern pattern-length text text-length)
+  ;; tells if `pattern` is part of `text`
   (if (> pattern-length text-length)
       nil
     (let ((text-idx 0)
@@ -115,28 +120,61 @@
       (= pattern-idx pattern-length))))
 
 (defun company-ofc-get-annotation (token)
-  (let ((c (find-candidate-in-list token g-candidate-list)))
+  (let ((c (find-candidate-in-list token (matched-candidate-s-candidate-list (car g-matched-candidate-stack)))))
     (when c
       (candidate-s-desc c))))
 
 (defun company-ofc-find-candidate (input)
-  (setq g-candidate-list '())
-  (let ((input-length (length input)))
-    (when (>= input-length company-ofc-min-token-len)
-      (let ((downcased-input (downcase input)))
-        (maphash (lambda (file-path file-hash)
-                   (maphash (lambda (token candidate-list)
-                              (let ((token-length (length token)))
-                                (when (do-fuzzy-compare downcased-input input-length
-                                                        token token-length)
-                                  (setq g-candidate-list (append candidate-list g-candidate-list)))))
-                            file-hash))
-                 g-filename2hash)
-        ;; sort candidates according to freq
-        (setq g-candidate-list (sort g-candidate-list
-                                     (lambda (a b)
-                                       (> (candidate-s-freq a) (candidate-s-freq b)))))
-        (delete-dups (mapcar 'candidate-s-token g-candidate-list))))))
+  (let ((input-length (length input))
+        (downcased-input (downcase input)))
+
+    (defun find-candidate-from-scratch ()
+      (setq candidate-result '())
+      (maphash (lambda (file-path file-hash)
+                 (maphash (lambda (token candidate-list)
+                            (let ((token-length (length token)))
+                              (when (do-fuzzy-compare downcased-input input-length
+                                                      token token-length)
+                                (setq candidate-result (append candidate-list candidate-result)))))
+                          file-hash))
+               g-filename2hash)
+      candidate-result)
+
+    (defun find-candidate-from-list (candidate-list)
+      (setq candidate-result '())
+      (dolist (candidate candidate-list)
+        (let ((token (candidate-s-token candidate)))
+          (when (do-fuzzy-compare downcased-input input-length
+                                  (downcase token) (length token))
+            (push candidate candidate-result))))
+      candidate-result)
+
+    (defun find-matched-candidate-in-stack (l)
+      (generic-list-find (lambda (matched-candidate)
+                           (let ((prefix (matched-candidate-s-downcased-input matched-candidate)))
+                             ;; better to use this predicate, but a len-based one is ok here
+                             ;; (do-fuzzy-compare prefix (length prefix) downcased-input input-length)
+                             (< (length prefix) input-length)))
+                         l))
+
+    (if (< input-length company-ofc-min-token-len)
+        (setq g-matched-candidate-stack '()) ;; clear matched candidates
+      (let ((matched-candidate (find-matched-candidate-in-stack g-matched-candidate-stack)))
+        (setq candidate-result '())
+        (if matched-candidate
+            (setq candidate-result
+                  (find-candidate-from-list (matched-candidate-s-candidate-list matched-candidate)))
+          (setq candidate-result
+                (find-candidate-from-scratch)))
+        (when (not (null candidate-result))
+          ;; sort candidates according to freq
+          (setq candidate-result (sort candidate-result
+                                       (lambda (a b)
+                                         (> (candidate-s-freq a) (candidate-s-freq b)))))
+          (push (make-matched-candidate-s :downcased-input downcased-input
+                                          :candidate-list candidate-result)
+                g-matched-candidate-stack)
+          (delete-dups (mapcar 'candidate-s-token candidate-result)))))))
 
 (defun company-ofc-grab-suffix (pattern)
   (when (looking-at pattern)
@@ -148,15 +186,16 @@
 
 (defun company-ofc-post-completion (token)
   ;; update matched candidates in each file
-  (mapcar (lambda (candidate)
-            (when (string= token (candidate-s-token candidate))
-              (cl-incf (candidate-s-freq candidate))))
-          g-candidate-list)
+  (dolist (candidate (matched-candidate-s-candidate-list (car g-matched-candidate-stack)))
+    (when (string= token (candidate-s-token candidate))
+      (cl-incf (candidate-s-freq candidate))))
   ;; remove overlapping suffix
   (let ((suffix (company-ofc-grab-suffix company-ofc-token-pattern)))
     (when (and suffix
                (do-fuzzy-compare suffix (length suffix) token (length token)))
-      (delete-char (length suffix)))))
+      (delete-char (length suffix))))
+  ;; clear matched candidates
+  (setq g-matched-candidate-stack '()))
 
 ;; -----------------------------------------------------------------------------
 
