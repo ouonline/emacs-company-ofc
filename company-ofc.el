@@ -3,10 +3,10 @@
 ;; -----------------------------------------------------------------------------
 ;; constants
 
-(setq company-ofc-token-char-set "0-9a-zA-Z_")
-(setq company-ofc-token-pattern (concat "[" company-ofc-token-char-set "]+"))
-(setq company-ofc-token-delim (concat "[^" company-ofc-token-char-set "]+"))
-(setq company-ofc-min-token-len 4)
+(defconst company-ofc-token-char-set "0-9a-zA-Z_")
+(defconst company-ofc-token-pattern (concat "[" company-ofc-token-char-set "]+"))
+(defconst company-ofc-token-delim (concat "[^" company-ofc-token-char-set "]+"))
+(defconst company-ofc-min-token-len 4)
 
 ;; -----------------------------------------------------------------------------
 ;; struct definitions
@@ -18,9 +18,9 @@
 ;; global variables
 
 (define-hash-table-test 'ofc-kv-map-cmp-func (lambda (a b) (string= a b)) 'sxhash)
-(setq g-filename2hash (make-hash-table :test 'ofc-kv-map-cmp-func))
+(defvar g-filename2hash (make-hash-table :test 'ofc-kv-map-cmp-func))
 
-(setq g-matched-candidate-stack '())
+(defvar g-matched-candidate-stack '())
 
 ;; -----------------------------------------------------------------------------
 
@@ -124,57 +124,57 @@
     (when c
       (candidate-s-desc c))))
 
+(defun find-candidate-from-scratch (downcased-input input-length)
+  (let ((candidate-result '()))
+    (maphash (lambda (file-path file-hash)
+               (maphash (lambda (token candidate-list)
+                          (let ((token-length (length token)))
+                            (when (do-fuzzy-compare downcased-input input-length
+                                                    token token-length)
+                              (setq candidate-result (append candidate-list candidate-result)))))
+                        file-hash))
+             g-filename2hash)
+    candidate-result))
+
+(defun find-candidate-from-list (downcased-input input-length candidate-list)
+  (let ((candidate-result '()))
+    (dolist (candidate candidate-list)
+      (let ((token (candidate-s-token candidate)))
+        (when (do-fuzzy-compare downcased-input input-length
+                                (downcase token) (length token))
+          (push candidate candidate-result))))
+    candidate-result))
+
+(defun find-matched-candidate-in-stack (downcased-input input-length)
+  (generic-list-find (lambda (matched-candidate)
+                       (let ((prefix (matched-candidate-s-downcased-input matched-candidate)))
+                         ;; better to use this predicate, but a len-based one is ok here
+                         ;; (do-fuzzy-compare prefix (length prefix) downcased-input input-length)
+                         (< (length prefix) input-length)))
+                     g-matched-candidate-stack))
+
 (defun company-ofc-find-candidate (input)
-  (let ((input-length (length input))
-        (downcased-input (downcase input)))
-
-    (defun find-candidate-from-scratch ()
-      (setq candidate-result '())
-      (maphash (lambda (file-path file-hash)
-                 (maphash (lambda (token candidate-list)
-                            (let ((token-length (length token)))
-                              (when (do-fuzzy-compare downcased-input input-length
-                                                      token token-length)
-                                (setq candidate-result (append candidate-list candidate-result)))))
-                          file-hash))
-               g-filename2hash)
-      candidate-result)
-
-    (defun find-candidate-from-list (candidate-list)
-      (setq candidate-result '())
-      (dolist (candidate candidate-list)
-        (let ((token (candidate-s-token candidate)))
-          (when (do-fuzzy-compare downcased-input input-length
-                                  (downcase token) (length token))
-            (push candidate candidate-result))))
-      candidate-result)
-
-    (defun find-matched-candidate-in-stack (l)
-      (generic-list-find (lambda (matched-candidate)
-                           (let ((prefix (matched-candidate-s-downcased-input matched-candidate)))
-                             ;; better to use this predicate, but a len-based one is ok here
-                             ;; (do-fuzzy-compare prefix (length prefix) downcased-input input-length)
-                             (< (length prefix) input-length)))
-                         l))
-
+  (let ((input-length (length input)))
     (if (< input-length company-ofc-min-token-len)
         (setq g-matched-candidate-stack '()) ;; clear matched candidates
-      (let ((matched-candidate (find-matched-candidate-in-stack g-matched-candidate-stack)))
-        (setq candidate-result '())
-        (if matched-candidate
+      (let ((downcased-input (downcase input)))
+        (let ((matched-candidate (find-matched-candidate-in-stack downcased-input input-length))
+              (candidate-result '()))
+          (if matched-candidate
+              (setq candidate-result
+                    (find-candidate-from-list downcased-input input-length
+                                              (matched-candidate-s-candidate-list matched-candidate)))
             (setq candidate-result
-                  (find-candidate-from-list (matched-candidate-s-candidate-list matched-candidate)))
-          (setq candidate-result
-                (find-candidate-from-scratch)))
-        (when (not (null candidate-result))
-          ;; sort candidates according to freq
-          (setq candidate-result (sort candidate-result
-                                       (lambda (a b)
-                                         (> (candidate-s-freq a) (candidate-s-freq b)))))
-          (push (make-matched-candidate-s :downcased-input downcased-input
-                                          :candidate-list candidate-result)
-                g-matched-candidate-stack)
-          (delete-dups (mapcar 'candidate-s-token candidate-result)))))))
+                  (find-candidate-from-scratch downcased-input input-length)))
+          (when (not (null candidate-result))
+            ;; sort candidates according to freq
+            (setq candidate-result (sort candidate-result
+                                         (lambda (a b)
+                                           (> (candidate-s-freq a) (candidate-s-freq b)))))
+            (push (make-matched-candidate-s :downcased-input downcased-input
+                                            :candidate-list candidate-result)
+                  g-matched-candidate-stack)
+            (delete-dups (mapcar 'candidate-s-token candidate-result))))))))
 
 (defun company-ofc-grab-suffix (pattern)
   (when (looking-at pattern)
