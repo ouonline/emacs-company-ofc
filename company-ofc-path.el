@@ -3,7 +3,7 @@
 ;; -----------------------------------------------------------------------------
 ;; constants
 
-(defconst company-ofc-path-token-char-set "0-9a-zA-Z_/\.-")
+(defconst company-ofc-path-token-char-set "0-9a-zA-Z_/\.~-")
 (defconst company-ofc-path-token-pattern (concat "[" company-ofc-path-token-char-set "]+"))
 
 ;; -----------------------------------------------------------------------------
@@ -43,7 +43,10 @@
       (when (string-match-p "/" prefix)
         ;; returns a pseudo prefix to make tooltip shown in the proper position and
         ;; keeps the real prefix in `g-real-prefix`
-        (setq g-real-prefix prefix)
+        (if (string-prefix-p "~/" prefix)
+            (setq g-real-prefix (concat (substitute-in-file-name "$HOME/")
+                                        (substring-no-properties prefix 2)))
+          (setq g-real-prefix prefix))
         (file-name-nondirectory prefix)))))
 
 (defun find-entry-list-in-stack (parent-dir)
