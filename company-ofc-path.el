@@ -72,7 +72,7 @@
 
 (defun company-ofc-path-find-candidate (not-used)
   (let ((parent-dir (file-name-directory g-real-prefix))
-        (last-component (file-name-nondirectory g-real-prefix)))
+        (last-component (downcase (file-name-nondirectory g-real-prefix))))
     (when (file-directory-p parent-dir)
       (let ((entry-list (get-entry-list parent-dir)))
         (when (not (null entry-list))
@@ -80,7 +80,7 @@
                 (entry-result '()))
             (dolist (entry entry-list)
               (when (do-fuzzy-compare last-component last-component-length
-                                      entry (length entry))
+                                      (downcase entry) (length entry))
                 (push entry entry-result)))
             entry-result))))))
 
