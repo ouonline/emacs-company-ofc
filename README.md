@@ -11,8 +11,6 @@ These are fuzzy completion backends for [company-mode](https://github.com/compan
 
 (add-to-list 'load-path "/path/to/emacs-company-ofc")
 
-(make-local-variable 'company-backends)
-
 (add-hook 'prog-mode-hook (lambda ()
                             (setq-local company-backends '(company-ofc-path company-ofc))
                             (company-mode)))
