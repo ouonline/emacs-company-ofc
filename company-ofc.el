@@ -192,7 +192,7 @@
   ;; remove overlapping suffix
   (let ((suffix (company-ofc-grab-suffix company-ofc-token-pattern)))
     (when (and suffix
-               (do-fuzzy-compare suffix (length suffix) token (length token)))
+               (do-fuzzy-compare (downcase suffix) (length suffix) (downcase token) (length token)))
       (delete-char (length suffix))))
   ;; clear matched candidates
   (setq g-matched-candidate-stack '()))
