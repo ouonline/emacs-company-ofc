@@ -142,7 +142,7 @@
       (let ((token (candidate-s-token candidate)))
         (when (do-fuzzy-compare downcased-input input-length
                                 (downcase token) (length token))
-          (push candidate candidate-result))))
+          (setq candidate-result (append candidate-result (list candidate))))))
     candidate-result))
 
 (defun find-matched-candidate-in-stack (downcased-input input-length)
@@ -168,9 +168,9 @@
                   (find-candidate-from-scratch downcased-input input-length)))
           (when (not (null candidate-result))
             ;; sort candidates according to freq
-            (setq candidate-result (sort candidate-result
-                                         (lambda (a b)
-                                           (> (candidate-s-freq a) (candidate-s-freq b)))))
+            (setq candidate-result (cl-stable-sort candidate-result
+                                                   (lambda (a b)
+                                                     (> (candidate-s-freq a) (candidate-s-freq b)))))
             (push (make-matched-candidate-s :downcased-input downcased-input
                                             :candidate-list candidate-result)
                   g-matched-candidate-stack)
