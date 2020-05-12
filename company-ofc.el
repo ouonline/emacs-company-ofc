@@ -164,17 +164,18 @@
               (setq candidate-result
                     (find-candidate-from-list downcased-input input-length
                                               (matched-candidate-s-candidate-list matched-candidate)))
-            (setq candidate-result
-                  (find-candidate-from-scratch downcased-input input-length)))
-          (when (not (null candidate-result))
-            ;; sort candidates according to freq
-            (setq candidate-result (cl-stable-sort candidate-result
-                                                   (lambda (a b)
-                                                     (> (candidate-s-freq a) (candidate-s-freq b)))))
-            (push (make-matched-candidate-s :downcased-input downcased-input
-                                            :candidate-list candidate-result)
-                  g-matched-candidate-stack)
-            (delete-dups (mapcar 'candidate-s-token candidate-result))))))))
+            (progn
+              (setq candidate-result
+                    (find-candidate-from-scratch downcased-input input-length))
+              (when candidate-result
+                ;; sort candidates according to freq
+                (setq candidate-result (cl-stable-sort candidate-result
+                                                       (lambda (a b)
+                                                         (> (candidate-s-freq a) (candidate-s-freq b)))))
+                (push (make-matched-candidate-s :downcased-input downcased-input
+                                                :candidate-list candidate-result)
+                      g-matched-candidate-stack))))
+          (delete-dups (mapcar 'candidate-s-token candidate-result)))))))
 
 (defun company-ofc-grab-suffix (pattern)
   (when (looking-at pattern)
