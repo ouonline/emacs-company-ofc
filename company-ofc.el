@@ -11,7 +11,10 @@
 ;; -----------------------------------------------------------------------------
 ;; struct definitions
 
-(cl-defstruct candidate-s token freq desc)
+;; `freq` is the used frequency of `token` in its life time
+;; `edis` is the edit distance between `token` and current input
+(cl-defstruct candidate-s token freq edis desc)
+
 (cl-defstruct matched-candidate-s downcased-input candidate-list)
 
 ;; -----------------------------------------------------------------------------
@@ -153,6 +156,42 @@
                          (< (length prefix) input-length)))
                      g-matched-candidate-stack))
 
+(defun do-calc-edit-distance (a a-len b b-len)
+  (let ((a-seq (number-sequence 1 a-len))
+        (b-seq (number-sequence 1 b-len))
+        (dis-vec (make-vector (+ 1 b-len) 0)))
+    (cl-dolist (i b-seq)
+      (aset dis-vec i i))
+    (cl-dolist (i a-seq)
+      (let ((old (- i 1)))
+        (aset dis-vec 0 i)
+        (cl-dolist (j b-seq)
+          (let ((tmp (aref dis-vec j)))
+            (if (eq (elt a (- i 1))
+                    (elt b (- j 1)))
+                (aset dis-vec j old)
+              (aset dis-vec j (+ 1 (min (aref dis-vec j)
+                                        (aref dis-vec (- j 1))
+                                        old))))
+            (setq old tmp)))))
+    (aref dis-vec b-len)))
+
+(defun calc-edit-distance (a a-len b b-len)
+  (if (< a-len b-len)
+      (do-calc-edit-distance b b-len a a-len)
+    (do-calc-edit-distance a a-len b b-len)))
+
+;; sort candidates by their edit-distances and used-frequencies
+(defun sort-candidates (candidate-result)
+  (cl-stable-sort candidate-result
+                  (lambda (a b)
+                    (let ((freq-a (candidate-s-freq a))
+                          (freq-b (candidate-s-freq b)))
+                      (if (> freq-a freq-b)
+                          t
+                        (when (= freq-a freq-b)
+                          (< (candidate-s-edis a) (candidate-s-edis b))))))))
+
 (defun company-ofc-find-candidate (input)
   (let ((input-length (length input)))
     (if (< input-length company-ofc-min-token-len)
@@ -164,18 +203,20 @@
               (setq candidate-result
                     (find-candidate-from-list downcased-input input-length
                                               (matched-candidate-s-candidate-list matched-candidate)))
-            (progn
-              (setq candidate-result
-                    (find-candidate-from-scratch downcased-input input-length))
-              (when candidate-result
-                ;; sort candidates according to freq
-                (setq candidate-result (cl-stable-sort candidate-result
-                                                       (lambda (a b)
-                                                         (> (candidate-s-freq a) (candidate-s-freq b)))))
-                (push (make-matched-candidate-s :downcased-input downcased-input
-                                                :candidate-list candidate-result)
-                      g-matched-candidate-stack))))
-          (delete-dups (mapcar 'candidate-s-token candidate-result)))))))
+            (setq candidate-result
+                  (find-candidate-from-scratch downcased-input input-length)))
+          (when candidate-result
+            ;; calc edit distance for each candidate
+            (cl-dolist (candidate candidate-result)
+              (let ((token (candidate-s-token candidate)))
+                (setf (candidate-s-edis candidate)
+                      (calc-edit-distance input input-length
+                                          token (length token)))))
+            (setq candidate-result (sort-candidates candidate-result))
+            (push (make-matched-candidate-s :downcased-input downcased-input
+                                            :candidate-list candidate-result)
+                  g-matched-candidate-stack)
+            (delete-dups (mapcar 'candidate-s-token candidate-result))))))))
 
 (defun company-ofc-grab-suffix (pattern)
   (when (looking-at pattern)
@@ -193,7 +234,8 @@
   ;; remove overlapping suffix
   (let ((suffix (company-ofc-grab-suffix company-ofc-token-pattern)))
     (when (and suffix
-               (do-fuzzy-compare (downcase suffix) (length suffix) (downcase token) (length token)))
+               (do-fuzzy-compare (downcase suffix) (length suffix)
+                                 (downcase token) (length token)))
       (delete-char (length suffix))))
   ;; clear matched candidates
   (setq g-matched-candidate-stack '()))
