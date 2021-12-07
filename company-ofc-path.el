@@ -1,10 +1,21 @@
+;; -*- lexical-binding: t -*-
+
 (require 'cl-lib)
 
 ;; -----------------------------------------------------------------------------
-;; constants
+;; settings
 
-(defconst company-ofc-path-token-char-set "0-9a-zA-Z_/\.~-")
-(defconst company-ofc-path-token-pattern (concat "[" company-ofc-path-token-char-set "]+"))
+(defgroup company-ofc nil
+  "fuzzy completion backends for compnay-mode of emacs"
+  :prefix "company-ofc-"
+  :link '(info-link "(emacs)company-ofc")
+  :group 'matching)
+
+(defcustom company-ofc-path-token-charset "0-9a-zA-Z_/\.~-"
+  "valid path characters in regexp"
+  :type 'string)
+
+(defconst company-ofc-path-token-pattern (concat "[" company-ofc-path-token-charset "]+"))
 
 ;; -----------------------------------------------------------------------------
 ;; struct definitions
@@ -25,7 +36,7 @@
         (cl-return element))))
 
 (defun do-fuzzy-compare (pattern pattern-length text text-length)
-  ;; tells if `pattern` is part of `text`
+  "tells if `pattern` is part of `text`"
   (if (> pattern-length text-length)
       nil
     (let ((text-idx 0)

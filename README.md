@@ -1,10 +1,10 @@
-# Intruduction
+# Overview
 
 These are fuzzy completion backends for [company-mode](https://github.com/company-mode/company-mode) of [Emacs](https://www.gnu.org/software/emacs/).
 
-`company-ofc` is for general purpose completion and `company-ofc-path` for path completion.
+`company-ofc` is for general purpose completions and `company-ofc-path` for path completions.
 
-# Installation
+# Installations
 
 ```lisp
 ;; company mode settings example
@@ -25,4 +25,4 @@ You can use the following command
 emacs -batch -f batch-byte-compile *.el
 ```
 
-to create a byte-compiled version to speed up completion. **DO NOT** forget to re-compile when you update the source .el file.
+to create a byte-compiled version to speed up completions. **DO NOT** forget to re-compile when you update these `.el` files.

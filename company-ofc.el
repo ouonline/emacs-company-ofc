@@ -1,19 +1,38 @@
+;; -*- lexical-binding: t -*-
+
 (require 'cl-lib)
 
 ;; -----------------------------------------------------------------------------
-;; constants
+;; settings
 
-(defconst company-ofc-token-char-set "0-9a-zA-Z_")
-(defconst company-ofc-token-pattern (concat "[" company-ofc-token-char-set "]+"))
-(defconst company-ofc-token-delim (concat "[^" company-ofc-token-char-set "]+"))
-(defconst company-ofc-min-token-len 4)
+(defgroup company-ofc nil
+  "fuzzy completion backends for compnay-mode of emacs"
+  :prefix "company-ofc-"
+  :link '(info-link "(emacs)company-ofc")
+  :group 'matching)
+
+(defcustom company-ofc-min-token-len 4
+  "minimum length to trigger completion"
+  :type 'integer)
+
+(defcustom company-ofc-debug nil
+  "toggle this flag to get internal details for debugging"
+  :type 'boolean)
+
+(defcustom company-ofc-token-charset "0-9a-zA-Z_"
+  "valid token characters in regexp"
+  :type 'string)
+
+(defconst company-ofc-token-pattern (concat "[" company-ofc-token-charset "]+"))
+(defconst company-ofc-token-delim (concat "[^" company-ofc-token-charset "]+"))
 
 ;; -----------------------------------------------------------------------------
 ;; struct definitions
 
 ;; `freq` is the used frequency of `token` in its life time
-;; `edis` is the edit distance between `token` and current input
-(cl-defstruct candidate-s token freq edis desc)
+;; `edis` is the edit distance between `token` and current input and is modifed on the fly
+;; `filename` is where this token takes place
+(cl-defstruct candidate-s token freq edis filename)
 
 (cl-defstruct matched-candidate-s downcased-input candidate-list)
 
@@ -37,15 +56,15 @@
                        (string= token (candidate-s-token candidate)))
                      candidate-list))
 
-;; make sure candidate-list is not null
-(defun find-or-insert-candidate-list (candidate-list token freq desc)
+(defun find-or-insert-candidate-list (candidate-list token freq filename)
+  "callers should gurantee that `candidate-list` is not null"
   (let ((candidate (car candidate-list)))
     (if (string= token (candidate-s-token candidate))
         candidate
       (let ((rest (cdr candidate-list)))
         (if (null rest)
-            (setcdr candidate-list (list (make-candidate-s :token token :freq freq :desc desc)))
-          (find-or-insert-candidate-list rest token freq desc))))))
+            (setcdr candidate-list (list (make-candidate-s :token token :freq freq :filename filename)))
+          (find-or-insert-candidate-list rest token freq filename))))))
 
 (defun buffer2string (buffer)
   (with-current-buffer buffer
@@ -57,19 +76,19 @@
   (dolist (token (split-string (buffer2string buffer) company-ofc-token-delim t))
     (funcall callback-func token)))
 
-(defun add-token-to-hash (token freq desc file-hash)
+(defun add-token-to-hash (token freq filename file-hash)
   (let ((key (downcase token)))
     (let ((candidate-list (gethash key file-hash nil)))
       (if (not candidate-list)
-          (puthash key (list (make-candidate-s :token token :freq freq :desc desc)) file-hash)
-        (find-or-insert-candidate-list candidate-list token freq desc)))))
+          (puthash key (list (make-candidate-s :token token :freq freq :filename filename)) file-hash)
+        (find-or-insert-candidate-list candidate-list token freq filename)))))
 
 (defun make-hash-for-buffer (file-path file-buffer file-hash)
-  (let ((desc (concat "[" (file-name-nondirectory file-path) "]")))
+  (let ((filename (file-name-nondirectory file-path)))
     (for-each-token-in-buffer file-buffer
                               (lambda (token)
                                 (when (>= (length token) company-ofc-min-token-len)
-                                  (add-token-to-hash token 0 desc file-hash))))))
+                                  (add-token-to-hash token 0 filename file-hash))))))
 
 (defun company-ofc-init ()
   (let ((file-hash (make-hash-table :test 'ofc-kv-map-cmp-func))
@@ -80,8 +99,8 @@
       (puthash file-path file-hash g-filename2hash))))
 
 (defun update-buffer-hash (buffer file-path old-file-hash new-file-hash)
-  ;; rebuilds file hash, but keeps freq of each token
-  (let ((token-desc (concat "[" (file-name-nondirectory file-path) "]")))
+  "rebuilds file hashes, but keeps `freq` of each token"
+  (let ((token-filename (file-name-nondirectory file-path)))
     (for-each-token-in-buffer buffer
                               (lambda (token)
                                 (let ((old-candidate-list (gethash (downcase token) old-file-hash nil)))
@@ -90,10 +109,10 @@
                                         (if old-candidate
                                             (add-token-to-hash (candidate-s-token old-candidate)
                                                                (candidate-s-freq old-candidate)
-                                                               token-desc
+                                                               token-filename
                                                                new-file-hash)
-                                          (add-token-to-hash token 0 token-desc new-file-hash)))
-                                    (add-token-to-hash token 0 token-desc new-file-hash)))))))
+                                          (add-token-to-hash token 0 token-filename new-file-hash)))
+                                    (add-token-to-hash token 0 token-filename new-file-hash)))))))
 
 (add-hook 'after-save-hook
           (lambda ()
@@ -110,7 +129,7 @@
                               (remhash (buffer-file-name) g-filename2hash)))
 
 (defun do-fuzzy-compare (pattern pattern-length text text-length)
-  ;; tells if `pattern` is part of `text`
+  "tells if `pattern` is part of `text`"
   (if (> pattern-length text-length)
       nil
     (let ((text-idx 0)
@@ -125,7 +144,10 @@
 (defun company-ofc-get-annotation (token)
   (let ((c (find-candidate-in-list token (matched-candidate-s-candidate-list (car g-matched-candidate-stack)))))
     (when c
-      (candidate-s-desc c))))
+      (if company-ofc-debug
+          (format " -> freq: [%d], edis: [%d], file: [%s]"
+                  (candidate-s-freq c) (candidate-s-edis c) (candidate-s-filename c))
+        (concat "[" (candidate-s-filename c) "]")))))
 
 (defun find-candidate-from-scratch (downcased-input input-length)
   (let ((candidate-result '()))
@@ -181,8 +203,14 @@
       (do-calc-edit-distance b b-len a a-len)
     (do-calc-edit-distance a a-len b b-len)))
 
-;; sort candidates by their edit-distances and used-frequencies
-(defun sort-candidates (candidate-result)
+(defun sort-candidates (input input-length candidate-result)
+  "sort candidates by their edit-distances and used-frequencies"
+  ;; calc edit distance for each candidate
+  (cl-dolist (candidate candidate-result)
+    (let ((token (candidate-s-token candidate)))
+      (setf (candidate-s-edis candidate)
+            (calc-edit-distance input input-length
+                                token (length token)))))
   (cl-stable-sort candidate-result
                   (lambda (a b)
                     (let ((freq-a (candidate-s-freq a))
@@ -206,13 +234,7 @@
             (setq candidate-result
                   (find-candidate-from-scratch downcased-input input-length)))
           (when candidate-result
-            ;; calc edit distance for each candidate
-            (cl-dolist (candidate candidate-result)
-              (let ((token (candidate-s-token candidate)))
-                (setf (candidate-s-edis candidate)
-                      (calc-edit-distance input input-length
-                                          token (length token)))))
-            (setq candidate-result (sort-candidates candidate-result))
+            (setq candidate-result (sort-candidates input input-length candidate-result))
             (push (make-matched-candidate-s :downcased-input downcased-input
                                             :candidate-list candidate-result)
                   g-matched-candidate-stack)
@@ -227,16 +249,17 @@
     (match-string 0)))
 
 (defun company-ofc-post-completion (token)
-  ;; update matched candidates in each file
+  ;; update matched candidates of each file
   (dolist (candidate (matched-candidate-s-candidate-list (car g-matched-candidate-stack)))
     (when (string= token (candidate-s-token candidate))
       (cl-incf (candidate-s-freq candidate))))
   ;; remove overlapping suffix
   (let ((suffix (company-ofc-grab-suffix company-ofc-token-pattern)))
-    (when (and suffix
-               (do-fuzzy-compare (downcase suffix) (length suffix)
-                                 (downcase token) (length token)))
-      (delete-char (length suffix))))
+    (when suffix
+      (let ((suffix-length (length suffix)))
+        (when (do-fuzzy-compare (downcase suffix) suffix-length
+                                (downcase token) (length token))
+          (delete-char suffix-length)))))
   ;; clear matched candidates
   (setq g-matched-candidate-stack '()))
 
@@ -246,7 +269,6 @@
   (interactive (list 'interactive))
   (cl-case command
     (init (company-ofc-init))
-    ;;(interactive (company-begin-backend 'company-ofc))
     (prefix (company-ofc-grab-prefix company-ofc-token-pattern))
     (candidates (company-ofc-find-candidate arg))
     (post-completion (company-ofc-post-completion arg))
