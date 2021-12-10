@@ -6,7 +6,7 @@
 ;; settings
 
 (defgroup company-ofc nil
-  "fuzzy completion backends for compnay-mode of emacs"
+  "fuzzy completion backends for company-mode of emacs"
   :prefix "company-ofc-"
   :link '(info-link "(emacs)company-ofc")
   :group 'matching)

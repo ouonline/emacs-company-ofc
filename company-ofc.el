@@ -6,7 +6,7 @@
 ;; settings
 
 (defgroup company-ofc nil
-  "fuzzy completion backends for compnay-mode of emacs"
+  "fuzzy completion backends for company-mode of emacs"
   :prefix "company-ofc-"
   :link '(info-link "(emacs)company-ofc")
   :group 'matching)
@@ -29,11 +29,12 @@
 ;; -----------------------------------------------------------------------------
 ;; struct definitions
 
+;; `filename` is where this token occurs
 ;; `freq` is the used frequency of `token` in its life time
 ;; `edis` is the edit distance between `token` and current input and is modifed on the fly
-;; `filename` is where this token takes place
-(cl-defstruct candidate-s token freq edis filename)
+(cl-defstruct candidate-s token filename freq edis)
 
+;; `candidate-list` is a list of `candidate-s` instances
 (cl-defstruct matched-candidate-s downcased-input candidate-list)
 
 ;; -----------------------------------------------------------------------------
@@ -83,20 +84,19 @@
           (puthash key (list (make-candidate-s :token token :freq freq :filename filename)) file-hash)
         (find-or-insert-candidate-list candidate-list token freq filename)))))
 
-(defun make-hash-for-buffer (file-path file-buffer file-hash)
-  (let ((filename (file-name-nondirectory file-path)))
-    (for-each-token-in-buffer file-buffer
-                              (lambda (token)
-                                (when (>= (length token) company-ofc-min-token-len)
-                                  (add-token-to-hash token 0 filename file-hash))))))
+(defun make-hash-for-buffer (buffer)
+  (let ((file-path (buffer-file-name buffer)))
+    (when file-path
+      (let ((filename (file-name-nondirectory file-path))
+            (file-hash (make-hash-table :test 'ofc-kv-map-cmp-func)))
+        (for-each-token-in-buffer buffer
+                                  (lambda (token)
+                                    (when (>= (length token) company-ofc-min-token-len)
+                                      (add-token-to-hash token 0 filename file-hash))))
+        (puthash file-path file-hash g-filename2hash)))))
 
 (defun company-ofc-init ()
-  (let ((file-hash (make-hash-table :test 'ofc-kv-map-cmp-func))
-        (file-path (buffer-file-name)))
-    ;; each file has its own hash table
-    (when file-path
-      (make-hash-for-buffer file-path (current-buffer) file-hash)
-      (puthash file-path file-hash g-filename2hash))))
+  (make-hash-for-buffer (current-buffer)))
 
 (defun update-buffer-hash (buffer file-path old-file-hash new-file-hash)
   "rebuilds file hashes, but keeps `freq` of each token"
@@ -120,7 +120,7 @@
             (let ((file-path (buffer-file-name)))
               (let ((old-file-hash (gethash file-path g-filename2hash nil)))
                 (if (not old-file-hash)
-                    (company-ofc-init)
+                    (make-hash-for-buffer (current-buffer))
                   (let ((new-file-hash (make-hash-table :test 'ofc-kv-map-cmp-func)))
                     (update-buffer-hash (current-buffer) file-path old-file-hash new-file-hash)
                     (puthash file-path new-file-hash g-filename2hash)))))))
