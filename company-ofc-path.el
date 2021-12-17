@@ -20,22 +20,22 @@
 ;; -----------------------------------------------------------------------------
 ;; struct definitions
 
-(cl-defstruct candidate-s parent-dir entry-list)
+(cl-defstruct company-ofc-path-candidate-s parent-dir entry-list)
 
 ;; -----------------------------------------------------------------------------
 ;; global variales
 
-(defvar g-candidate-stack '())
-(defvar g-real-prefix "") ;; updated when `prefix` is called
+(defvar company-ofc-path-candidate-stack '())
+(defvar company-ofc-path-real-prefix "") ;; updated when `prefix` is called
 
 ;; -----------------------------------------------------------------------------
 
-(defun generic-list-find (predicate list)
+(defun company-ofc-path-generic-list-find (list predicate)
   (cl-dolist (element list)
     (if (funcall predicate element)
         (cl-return element))))
 
-(defun do-fuzzy-compare (pattern pattern-length text text-length)
+(defun company-ofc-path-do-fuzzy-compare (pattern pattern-length text text-length)
   "tells if `pattern` is part of `text`"
   (if (> pattern-length text-length)
       nil
@@ -53,23 +53,23 @@
     (let ((prefix (match-string 0)))
       (when (string-match-p "/" prefix)
         ;; returns a pseudo prefix to make tooltip shown at the proper position and
-        ;; stores the real prefix in `g-real-prefix`
+        ;; stores the real prefix in `company-ofc-path-real-prefix`
         (if (string-prefix-p "~/" prefix)
-            (setq g-real-prefix (concat (substitute-in-file-name "$HOME/")
-                                        (substring-no-properties prefix 2)))
-          (setq g-real-prefix prefix))
+            (setq company-ofc-path-real-prefix (concat (substitute-in-file-name "$HOME/")
+                                                       (substring-no-properties prefix 2)))
+          (setq company-ofc-path-real-prefix prefix))
         (file-name-nondirectory prefix)))))
 
-(defun find-entry-list-in-stack (parent-dir)
-  (generic-list-find (lambda (candidate)
-                       (let ((dir (candidate-s-parent-dir candidate)))
-                         (string= dir parent-dir)))
-                     g-candidate-stack))
+(defun company-ofc-path-find-entry-list-in-stack (parent-dir)
+  (company-ofc-path-generic-list-find company-ofc-path-candidate-stack
+                                      (lambda (candidate)
+                                        (let ((dir (company-ofc-path-candidate-s-parent-dir candidate)))
+                                          (string= dir parent-dir)))))
 
-(defun get-entry-list (parent-dir)
-  (let ((candidate (find-entry-list-in-stack parent-dir)))
+(defun company-ofc-path-get-entry-list (parent-dir)
+  (let ((candidate (company-ofc-path-find-entry-list-in-stack parent-dir)))
     (if candidate
-        (candidate-s-entry-list candidate)
+        (company-ofc-path-candidate-s-entry-list candidate)
       (let ((current-entry-list (directory-files parent-dir)))
         (if current-entry-list
             (let ((new-entry-list (mapcar (lambda (entry)
@@ -78,30 +78,30 @@
                                                   (concat entry "/")
                                                 entry)))
                                           current-entry-list)))
-              (push (make-candidate-s :parent-dir parent-dir
-                                      :entry-list new-entry-list)
-                    g-candidate-stack)
+              (push (make-company-ofc-path-candidate-s :parent-dir parent-dir
+                                                       :entry-list new-entry-list)
+                    company-ofc-path-candidate-stack)
               new-entry-list)
           '())))))
 
 (defun company-ofc-path-find-candidate (not-used)
-  (let ((parent-dir (file-name-directory g-real-prefix))
-        (last-component (downcase (file-name-nondirectory g-real-prefix))))
+  (let ((parent-dir (file-name-directory company-ofc-path-real-prefix))
+        (last-component (downcase (file-name-nondirectory company-ofc-path-real-prefix))))
     (when (file-directory-p parent-dir)
-      (let ((entry-list (get-entry-list parent-dir)))
+      (let ((entry-list (company-ofc-path-get-entry-list parent-dir)))
         (when (not (null entry-list))
           (let ((last-component-length (length last-component))
                 (entry-result '()))
             (dolist (entry entry-list)
-              (when (do-fuzzy-compare last-component last-component-length
-                                      (downcase entry) (length entry))
+              (when (company-ofc-path-do-fuzzy-compare last-component last-component-length
+                                                       (downcase entry) (length entry))
                 (push entry entry-result)))
             entry-result))))))
 
 (defun company-ofc-path-post-completion (token)
   (when (string-suffix-p "/" token)
     (delete-char (- 1)))
-  (setq g-candidate-stack '()))
+  (setq company-ofc-path-candidate-stack '()))
 
 (defun company-ofc-path (command &optional arg &rest ignored)
   (interactive (list 'interactive))
