@@ -1,8 +1,12 @@
 # Overview
 
-These are fuzzy completion backends for [company-mode](https://github.com/company-mode/company-mode) of [Emacs](https://www.gnu.org/software/emacs/).
+These are fuzzy completion backends for [company-mode](https://github.com/company-mode/company-mode) of [Emacs](https://www.gnu.org/software/emacs/). `company-ofc` is for general purpose completions and `company-ofc-path` for path completions.
 
-`company-ofc` is for general purpose completions and `company-ofc-path` for path completions.
+Candidates are case sensitive but the matching behavior is not. Modified or newly inserted words of a buffer cannot be found until this buffer is saved.
+
+# Screenshots
+
+![screenshot](img/screenshot.png)
 
 # Installations
 
@@ -18,11 +22,3 @@ These are fuzzy completion backends for [company-mode](https://github.com/compan
                             (setq-local company-backends '(company-ofc-path))
                             (company-mode)))
 ```
-
-You can use the following command
-
-```bash
-emacs -batch -f batch-byte-compile *.el
-```
-
-to create a byte-compiled version to speed up completions. **DO NOT** forget to re-compile when you update these `.el` files.
