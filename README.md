@@ -6,7 +6,13 @@ Candidates are case sensitive but the matching behavior is not. Modified or newl
 
 # Screenshots
 
-![screenshot](img/screenshot.png)
+## Generic Completions
+
+![ofc](img/ofc.png)
+
+## Path Completions
+
+![ofc-path](img/ofc-path.png)
 
 # Installations
 
