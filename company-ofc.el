@@ -53,7 +53,7 @@
     (if (funcall predicate element)
         (cl-return element))))
 
-(defun company-ofc--find-candidate-in-list (token candidate-list)
+(defun company-ofc--find-candidates-in-list (token candidate-list)
   (company-ofc--generic-list-find candidate-list
                                   (lambda (candidate)
                                     (string= token (company-ofc--candidate-s-token candidate)))))
@@ -107,7 +107,7 @@
      (lambda (token)
        (let ((old-candidate-list (gethash (downcase token) old-file-hash nil)))
          (if old-candidate-list
-             (let ((old-candidate (company-ofc--find-candidate-in-list token old-candidate-list)))
+             (let ((old-candidate (company-ofc--find-candidates-in-list token old-candidate-list)))
                (if old-candidate
                    (company-ofc--add-token-to-hash (company-ofc--candidate-s-token old-candidate)
                                                    (company-ofc--candidate-s-freq old-candidate)
@@ -145,7 +145,7 @@
       (= pattern-idx pattern-length))))
 
 (defun company-ofc--get-annotation (token)
-  (let ((c (company-ofc--find-candidate-in-list
+  (let ((c (company-ofc--find-candidates-in-list
             token
             (company-ofc--matched-info-s-candidate-list (car company-ofc--matched-info-stack)))))
     (when c
@@ -167,7 +167,7 @@
           matched-regions)
       (append matched-regions (list (cons text-idx (+ 1 text-idx)))))))
 
-(defun company-ofc--find-candidate-from-scratch (downcased-input input-length)
+(defun company-ofc--find-candidates-from-scratch (downcased-input input-length)
   (let ((candidate-result '()))
     (maphash (lambda (file-path file-hash)
                (maphash (lambda (token candidate-list)
@@ -184,7 +184,7 @@
              company-ofc--filename2hash)
     candidate-result))
 
-(defun company-ofc--find-candidate-from-list (downcased-input input-length candidate-list)
+(defun company-ofc--find-candidates-from-list (downcased-input input-length candidate-list)
   (let ((candidate-result '()))
     (dolist (candidate candidate-list)
       (let ((token (company-ofc--candidate-s-token candidate))
@@ -247,7 +247,7 @@
                         (when (= freq-a freq-b)
                           (< (company-ofc--candidate-s-edis a) (company-ofc--candidate-s-edis b))))))))
 
-(defun company-ofc--find-candidate (input)
+(defun company-ofc--find-candidates (input)
   (let ((input-length (length input)))
     (if (< input-length company-ofc-min-token-len)
         (setq company-ofc--matched-info-stack '()) ;; clear matched candidates
@@ -256,10 +256,10 @@
               (candidate-result '()))
           (if matched-candidate
               (setq candidate-result
-                    (company-ofc--find-candidate-from-list downcased-input input-length
-                                                           (company-ofc--matched-info-s-candidate-list matched-candidate)))
+                    (company-ofc--find-candidates-from-list downcased-input input-length
+                                                            (company-ofc--matched-info-s-candidate-list matched-candidate)))
             (setq candidate-result
-                  (company-ofc--find-candidate-from-scratch downcased-input input-length)))
+                  (company-ofc--find-candidates-from-scratch downcased-input input-length)))
           (when candidate-result
             (setq candidate-result (company-ofc--sort-candidates input input-length candidate-result))
             (push (make-company-ofc--matched-info-s :downcased-input downcased-input
@@ -306,7 +306,7 @@
   (cl-case command
     (init (company-ofc--init))
     (prefix (company-ofc--grab-prefix company-ofc-token-pattern))
-    (candidates (company-ofc--find-candidate arg))
+    (candidates (company-ofc--find-candidates arg))
     (match (company-ofc--get-matched-info arg))
     (annotation (company-ofc--get-annotation arg))
     (post-completion (company-ofc--post-completion arg))

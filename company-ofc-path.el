@@ -84,7 +84,7 @@
               new-entry-list)
           '())))))
 
-(defun company-ofc--path-find-candidate (not-used)
+(defun company-ofc--path-find-candidates (not-used)
   (let ((parent-dir (file-name-directory company-ofc--path-real-prefix))
         (last-component (downcase (file-name-nondirectory company-ofc--path-real-prefix))))
     (when (file-directory-p parent-dir)
@@ -107,7 +107,7 @@
   (interactive (list 'interactive))
   (cl-case command
     (prefix (company-ofc--path-grab-prefix company-ofc-path-token-pattern))
-    (candidates (company-ofc--path-find-candidate arg))
+    (candidates (company-ofc--path-find-candidates arg))
     (post-completion (company-ofc--path-post-completion arg))
     (sorted t)
     (no-cache t)))
