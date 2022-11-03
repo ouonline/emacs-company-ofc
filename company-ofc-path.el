@@ -30,11 +30,6 @@
 
 ;; -----------------------------------------------------------------------------
 
-(defun company-ofc--path-generic-list-find (list predicate)
-  (cl-dolist (element list)
-    (if (funcall predicate element)
-        (cl-return element))))
-
 (defun company-ofc--path-do-fuzzy-compare (pattern pattern-length text text-length)
   "tells if `pattern` is part of `text`"
   (if (> pattern-length text-length)
@@ -61,10 +56,10 @@
         (file-name-nondirectory prefix)))))
 
 (defun company-ofc--path-find-entry-list-in-stack (parent-dir)
-  (company-ofc--path-generic-list-find company-ofc--path-candidate-stack
-                                       (lambda (candidate)
-                                         (let ((dir (company-ofc--path-candidate-s-parent-dir candidate)))
-                                           (string= dir parent-dir)))))
+  (cl-dolist (candidate company-ofc--path-candidate-stack)
+    (let ((dir (company-ofc--path-candidate-s-parent-dir candidate)))
+      (when (string= dir parent-dir)
+        (cl-return candidate)))))
 
 (defun company-ofc--path-get-entry-list (parent-dir)
   (let ((candidate (company-ofc--path-find-entry-list-in-stack parent-dir)))

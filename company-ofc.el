@@ -53,15 +53,10 @@
 
 ;; -----------------------------------------------------------------------------
 
-(defun company-ofc--generic-list-filter (list predicate)
-  (cl-dolist (element list)
-    (if (funcall predicate element)
-        (cl-return element))))
-
 (defun company-ofc--find-candidate-in-list (token candidate-list)
-  (company-ofc--generic-list-filter candidate-list
-                                    (lambda (candidate)
-                                      (string= token (company-ofc--candidate-s-token candidate)))))
+  (cl-dolist (candidate candidate-list)
+    (when (string= token (company-ofc--candidate-s-token candidate))
+      (cl-return candidate))))
 
 (defun company-ofc--buffer2string (buffer)
   (with-current-buffer buffer
@@ -279,6 +274,11 @@
 (defun company-ofc--grab-prefix (pattern)
   (when (looking-back pattern (line-beginning-position) t)
     (match-string 0)))
+
+(defun company-ofc--generic-list-filter (list predicate)
+  (cl-dolist (element list)
+    (when (funcall predicate element)
+      (cl-return element))))
 
 (defun company-ofc--post-completion (token)
   ;; update frequency of the matched candidate
