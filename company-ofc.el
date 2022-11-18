@@ -98,14 +98,14 @@
   (company-ofc--add-buffer-tokens (current-buffer)))
 
 (defun company-ofc--remove-buffer-tokens (buffer)
-  (let ((file-path (buffer-file-name buffer)))
-    (let ((file-candidate-list (gethash file-path company-ofc--filepath2candidates)))
-      (when file-candidate-list
-        (mapc (lambda (candidate)
-                (let ((loc-list (company-ofc--candidate-s-loc-list candidate)))
-                  (setf (company-ofc--candidate-s-loc-list candidate) (delete file-path loc-list))))
-              file-candidate-list)
-        (remhash file-path company-ofc--filepath2candidates)))))
+  (let* ((file-path (buffer-file-name buffer))
+         (file-candidate-list (gethash file-path company-ofc--filepath2candidates)))
+    (when file-candidate-list
+      (mapc (lambda (candidate)
+              (let ((loc-list (company-ofc--candidate-s-loc-list candidate)))
+                (setf (company-ofc--candidate-s-loc-list candidate) (delete file-path loc-list))))
+            file-candidate-list)
+      (remhash file-path company-ofc--filepath2candidates))))
 
 (add-hook 'after-save-hook
           (lambda ()
@@ -134,12 +134,11 @@
 (defun company-ofc--get-annotation (token)
   (let ((item (car company-ofc--matched-item-stack)))
     (cl-dolist (info (company-ofc--matched-item-s-info-list item))
-      (let ((candidate (company-ofc--matched-item-info-s-candidate info)))
-        (let ((ctoken (company-ofc--candidate-s-token candidate))
-              (loc-list (company-ofc--candidate-s-loc-list candidate)))
-          (when (string= token ctoken)
-            (let ((file-path (car loc-list)))
-              (cl-return (concat "[" (file-name-nondirectory file-path) "]")))))))))
+      (let* ((candidate (company-ofc--matched-item-info-s-candidate info))
+             (ctoken (company-ofc--candidate-s-token candidate)))
+        (when (string= token ctoken)
+          (let ((file-path (car (company-ofc--candidate-s-loc-list candidate))))
+            (cl-return (concat "[" (file-name-nondirectory file-path) "]"))))))))
 
 (defun company-ofc--record-matched-region (text-idx matched-region-list)
   "updates the matched regions in the form of `((start1 . end1) (start2 . end2))` and returns it."
@@ -177,19 +176,19 @@
   "creates a new `company-ofc--matched-item-info-s` list from another."
   (let ((info-list '()))
     (mapc (lambda (info)
-            (let ((candidate (company-ofc--matched-item-info-s-candidate info)))
-              (let ((downcased-token (downcase (company-ofc--candidate-s-token candidate))))
-                (let ((token-length (length downcased-token))
-                      (matched-region-list '()))
-                  (when (company-ofc--do-fuzzy-compare
-                         downcased-input input-length downcased-token token-length
-                         (lambda (text-idx)
-                           (setq matched-region-list (company-ofc--record-matched-region text-idx matched-region-list))))
-                    (setq info-list (append info-list
-                                            (list (make-company-ofc--matched-item-info-s
-                                                   :candidate candidate
-                                                   :edis 0
-                                                   :matched-region-list matched-region-list)))))))))
+            (let* ((candidate (company-ofc--matched-item-info-s-candidate info))
+                   (downcased-token (downcase (company-ofc--candidate-s-token candidate)))
+                   (token-length (length downcased-token))
+                   (matched-region-list '()))
+              (when (company-ofc--do-fuzzy-compare
+                     downcased-input input-length downcased-token token-length
+                     (lambda (text-idx)
+                       (setq matched-region-list (company-ofc--record-matched-region text-idx matched-region-list))))
+                (setq info-list (append info-list
+                                        (list (make-company-ofc--matched-item-info-s
+                                               :candidate candidate
+                                               :edis 0
+                                               :matched-region-list matched-region-list)))))))
           another-info-list)
     info-list))
 
@@ -230,21 +229,19 @@
   "sort matched infos by their edit-distances and used-frequencies."
   ;; calc edit distance for each candidate
   (cl-dolist (info matched-info-list)
-    (let ((candidate (company-ofc--matched-item-info-s-candidate info)))
-      (let ((token (company-ofc--candidate-s-token candidate)))
-        (setf (company-ofc--matched-item-info-s-edis info)
-              (company-ofc--calc-edit-distance input input-length
-                                               token (length token))))))
+    (let* ((candidate (company-ofc--matched-item-info-s-candidate info))
+           (token (company-ofc--candidate-s-token candidate)))
+      (setf (company-ofc--matched-item-info-s-edis info)
+            (company-ofc--calc-edit-distance input input-length
+                                             token (length token)))))
   (cl-stable-sort matched-info-list
                   (lambda (a b)
-                    (let ((candidate-a (company-ofc--matched-item-info-s-candidate a))
-                          (candidate-b (company-ofc--matched-item-info-s-candidate b)))
-                      (let ((freq-a (company-ofc--candidate-s-freq candidate-a))
-                            (freq-b (company-ofc--candidate-s-freq candidate-b)))
-                        (if (> freq-a freq-b)
-                            t
-                          (when (= freq-a freq-b)
-                            (< (company-ofc--matched-item-info-s-edis a) (company-ofc--matched-item-info-s-edis b)))))))))
+                    (let ((freq-a (company-ofc--candidate-s-freq (company-ofc--matched-item-info-s-candidate a)))
+                          (freq-b (company-ofc--candidate-s-freq (company-ofc--matched-item-info-s-candidate b))))
+                      (if (> freq-a freq-b)
+                          t
+                        (when (= freq-a freq-b)
+                          (< (company-ofc--matched-item-info-s-edis a) (company-ofc--matched-item-info-s-edis b))))))))
 
 (defun company-ofc--find-candidates (input)
   "returns a list of matched strings."
@@ -302,10 +299,10 @@
 (defun company-ofc--get-matched-info (token)
   (let ((item (car company-ofc--matched-item-stack)))
     (cl-dolist (info (company-ofc--matched-item-s-info-list item))
-      (let ((candidate (company-ofc--matched-item-info-s-candidate info)))
-        (let ((ctoken (company-ofc--candidate-s-token candidate)))
-          (when (string= ctoken token)
-            (cl-return (company-ofc--matched-item-info-s-matched-region-list info))))))))
+      (let* ((candidate (company-ofc--matched-item-info-s-candidate info))
+             (ctoken (company-ofc--candidate-s-token candidate)))
+        (when (string= ctoken token)
+          (cl-return (company-ofc--matched-item-info-s-matched-region-list info)))))))
 
 ;; -----------------------------------------------------------------------------
 
