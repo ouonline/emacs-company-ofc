@@ -15,12 +15,11 @@
   "minimum length to trigger completion"
   :type 'integer)
 
-(defcustom company-ofc-token-charset "0-9a-zA-Z_"
-  "valid token characters in regexp"
-  :type 'string)
-
-(defconst company-ofc-token-pattern (concat "[" company-ofc-token-charset "]+"))
-(defconst company-ofc-token-delim (concat "[^" company-ofc-token-charset "]+"))
+;; default token charset. users can change `company-ofc-token-charset` before loading this plugin.
+;; these 3 variables are buffer-local.
+(defvar company-ofc-token-charset  "0-9a-zA-Z_")
+(defvar company-ofc-token-pattern (concat "[" company-ofc-token-charset "]+"))
+(defvar company-ofc-token-delim (concat "[^" company-ofc-token-charset "]+"))
 
 ;; -----------------------------------------------------------------------------
 ;; struct definitions
@@ -95,6 +94,8 @@
         (puthash file-path file-candidate-list company-ofc--filepath2candidates)))))
 
 (defun company-ofc--init ()
+  (setq-local company-ofc-token-pattern (concat "[" company-ofc-token-charset "]+"))
+  (setq-local company-ofc-token-delim (concat "[^" company-ofc-token-charset "]+"))
   (company-ofc--add-buffer-tokens (current-buffer)))
 
 (defun company-ofc--remove-buffer-tokens (buffer)
