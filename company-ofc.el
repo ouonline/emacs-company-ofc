@@ -11,7 +11,7 @@
   :link '(info-link "(emacs)company-ofc")
   :group 'matching)
 
-(defcustom company-ofc-min-token-len 4
+(defcustom company-ofc-min-token-len 3
   "minimum length to trigger completion"
   :type 'integer)
 
