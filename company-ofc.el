@@ -11,8 +11,12 @@
   :link '(info-link "(emacs)company-ofc")
   :group 'matching)
 
-(defcustom company-ofc-min-token-len 3
+(defcustom company-ofc-min-trigger-len 3
   "minimum length to trigger completion"
+  :type 'integer)
+
+(defcustom company-ofc-min-token-len 4
+  "minimum length of tokens that are indexed"
   :type 'integer)
 
 ;; default token charset. users can change `company-ofc-token-charset` before loading this plugin.
@@ -247,7 +251,7 @@
 (defun company-ofc--find-candidates (input)
   "returns a list of matched strings."
   (let ((input-length (length input)))
-    (if (< input-length company-ofc-min-token-len)
+    (if (< input-length company-ofc-min-trigger-len)
         (setq company-ofc--matched-item-stack '()) ;; clear matched candidates
       (let ((downcased-input (downcase input))
             (matched-item (company-ofc--find-matched-item-in-stack input-length))
