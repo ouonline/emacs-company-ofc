@@ -20,16 +20,17 @@
   :type 'integer)
 
 ;; default token charset. users can change `company-ofc-token-charset` before loading this plugin.
-;; these 3 variables are buffer-local.
+;; these variables are buffer-local.
 (defvar company-ofc-token-charset  "0-9a-zA-Z_")
 (defvar company-ofc-token-pattern (concat "[" company-ofc-token-charset "]+"))
 (defvar company-ofc-token-delim (concat "[^" company-ofc-token-charset "]+"))
+(defvar company-ofc-enabled nil)
 
 ;; -----------------------------------------------------------------------------
 ;; struct definitions
 
 ;; `freq` is the used frequency of `token` in its life time
-;; `loc-list` is a list of filepath(s) where this token occurs. `loc` is short for `location`
+;; `loc-list` is a list of buffer(s) where this token occurs. `loc` is short for `location`
 (cl-defstruct company-ofc--candidate-s token freq loc-list)
 
 ;; `candidate` is a `company-ofc--candidate-s` instance
@@ -48,8 +49,8 @@
 ;; a hash table containing all tokens: token => `company-ofc--candidate-s`
 (defvar company-ofc--token-hash (make-hash-table :test 'company-ofc--hash-strcmp))
 
-;; a hash table containing candidates' of a file: filepath => candidate-list
-(defvar company-ofc--filepath2candidates (make-hash-table :test 'company-ofc--hash-strcmp))
+;; a hash table containing candidates' of a buffer: buffer => candidate-list
+(defvar company-ofc--buffer2candidates (make-hash-table :test 'company-ofc--hash-strcmp))
 
 ;; each element of this stack is a `company-ofc--matched-item-s` instance
 (defvar company-ofc--matched-item-stack '())
@@ -71,56 +72,79 @@
   (cl-dolist (token (split-string (company-ofc--buffer2string buffer) company-ofc-token-delim t))
     (funcall callback-func token)))
 
-(defun company-ofc--find-or-insert-token-hash (token file-path)
-  "finds or inserts a `company-ofc--candidate-s` instance of the specified token in `company-ofc--token-hash`,
- and returns that instance."
+(defun company-ofc--find-or-insert-token-hash (token buffer)
+  "finds or inserts a `company-ofc--candidate-s` instance of the specified token in
+ `company-ofc--token-hash` and returns that instance."
   (let ((candidate (gethash token company-ofc--token-hash)))
     (when (not candidate)
       (setq candidate (make-company-ofc--candidate-s :token token :freq 0 :loc-list '()))
       (puthash token candidate company-ofc--token-hash))
     (let ((loc-list (company-ofc--candidate-s-loc-list candidate)))
-      (setf (company-ofc--candidate-s-loc-list candidate) (append loc-list (list file-path))))
+      ;; `buffer` is guranteed unique in `loc-list` by the caller
+      (setf (company-ofc--candidate-s-loc-list candidate) (append loc-list (list buffer))))
     candidate))
 
-(defun company-ofc--add-buffer-tokens (buffer)
-  (let ((file-path (buffer-file-name buffer)))
-    (when file-path
-      (let ((dedup (make-hash-table :test 'company-ofc--hash-strcmp))
-            (file-candidate-list '()))
-        (company-ofc--for-each-token-in-buffer buffer
-                                               (lambda (token)
-                                                 (when (>= (length token) company-ofc-min-token-len)
-                                                   (let ((found (gethash token dedup)))
-                                                     (when (not found)
-                                                       (let ((candidate (company-ofc--find-or-insert-token-hash token file-path)))
-                                                         (setq file-candidate-list (append file-candidate-list (list candidate))))
-                                                       (puthash token t dedup))))))
-        (puthash file-path file-candidate-list company-ofc--filepath2candidates)))))
+(defun company-ofc--remove-token-from-token-hash (token buffer)
+  (let ((candidate (gethash token company-ofc--token-hash)))
+    (when candidate
+      (let ((loc-list (company-ofc--candidate-s-loc-list candidate)))
+        (setq loc-list (delete buffer loc-list))
+        (if (eq nil loc-list)
+            (remhash token company-ofc--token-hash)
+          (setf (company-ofc--candidate-s-loc-list candidate) loc-list))))))
+
+(defun company-ofc--update-buffer-tokens (buffer)
+  (let ((new-token-set (make-hash-table :test 'company-ofc--hash-strcmp)))
+    ;; construct a new-token-set for the modified buffer
+    (company-ofc--for-each-token-in-buffer buffer
+                                           (lambda (token)
+                                             (puthash token t new-token-set)))
+    (let ((old-candidate-list (gethash buffer company-ofc--buffer2candidates '()))
+          (new-candidate-list '()))
+      (cl-dolist (candidate old-candidate-list)
+        (let* ((token (company-ofc--candidate-s-token candidate))
+               (found (gethash token new-token-set)))
+          (if found
+              ;; if a token in the new-token-set exists in the old one, delete it from new-token-set
+              ;; so that it remains unchanged in `company-ofc--token-hash`
+              (progn
+                (remhash token new-token-set)
+                (setq new-candidate-list (append new-candidate-list (list candidate))))
+            ;; otherwise remove it from `company-ofc--token-hash`
+            (company-ofc--remove-token-from-token-hash token buffer))))
+      (maphash (lambda (token unused)
+                 (let ((candidate (company-ofc--find-or-insert-token-hash token buffer)))
+                   (setq new-candidate-list (append new-candidate-list (list candidate)))))
+               new-token-set)
+      (puthash buffer new-candidate-list company-ofc--buffer2candidates))))
 
 (defun company-ofc--init ()
   (setq-local company-ofc-token-pattern (concat "[" company-ofc-token-charset "]+"))
   (setq-local company-ofc-token-delim (concat "[^" company-ofc-token-charset "]+"))
-  (company-ofc--add-buffer-tokens (current-buffer)))
+  (setq-local company-ofc-enabled t)
+  (company-ofc--update-buffer-tokens (current-buffer)))
 
-(defun company-ofc--remove-buffer-tokens (buffer)
-  (let* ((file-path (buffer-file-name buffer))
-         (file-candidate-list (gethash file-path company-ofc--filepath2candidates)))
-    (when file-candidate-list
+(defun company-ofc--destroy-buffer-tokens (buffer)
+  (let ((candidate-list (gethash buffer company-ofc--buffer2candidates)))
+    (when candidate-list
       (mapc (lambda (candidate)
               (let ((loc-list (company-ofc--candidate-s-loc-list candidate)))
-                (setf (company-ofc--candidate-s-loc-list candidate) (delete file-path loc-list))))
-            file-candidate-list)
-      (remhash file-path company-ofc--filepath2candidates))))
+                (setq loc-list (delete buffer loc-list))
+                (if (eq nil loc-list)
+                    (remhash (company-ofc--candidate-s-token candidate) company-ofc--token-hash)
+                  (setf (company-ofc--candidate-s-loc-list candidate) loc-list))))
+            candidate-list)
+      (remhash buffer company-ofc--buffer2candidates))))
 
 (add-hook 'after-save-hook
           (lambda ()
-            (setq company-ofc--matched-item-stack '()) ;; clear matched stack
-            (let ((buffer (current-buffer)))
-              (company-ofc--remove-buffer-tokens buffer)
-              (company-ofc--add-buffer-tokens buffer))))
+            (when company-ofc-enabled
+              (setq company-ofc--matched-item-stack '()) ;; clear matched stack
+              (company-ofc--update-buffer-tokens (current-buffer)))))
 
 (add-hook 'kill-buffer-hook (lambda ()
-                              (company-ofc--remove-buffer-tokens (current-buffer))))
+                              (when company-ofc-enabled
+                                (company-ofc--destroy-buffer-tokens (current-buffer)))))
 
 (defun company-ofc--do-fuzzy-compare (pattern pattern-length text text-length &optional matched-hook-func)
   "tells if `pattern` is part of `text`."
@@ -142,8 +166,8 @@
       (let* ((candidate (company-ofc--matched-item-info-s-candidate info))
              (ctoken (company-ofc--candidate-s-token candidate)))
         (when (string= token ctoken)
-          (let ((file-path (car (company-ofc--candidate-s-loc-list candidate))))
-            (cl-return (concat "[" (file-name-nondirectory file-path) "]"))))))))
+          (let ((buffer (car (company-ofc--candidate-s-loc-list candidate))))
+            (cl-return (concat "[" (buffer-name buffer) "]"))))))))
 
 (defun company-ofc--record-matched-region (text-idx matched-region-list)
   "updates the matched regions in the form of `((start1 . end1) (start2 . end2))` and returns it."
@@ -160,20 +184,17 @@
   "creates a list of `company-ofc--matched-item-info-s` instances."
   (let ((info-list '()))
     (maphash (lambda (token candidate)
-               (let ((loc-list (company-ofc--candidate-s-loc-list candidate)))
-                 (if (= 0 (length loc-list))
-                     (remhash token company-ofc--token-hash) ;; remhash inside maphash is ok
-                   (let ((downcased-token (downcase token))
-                         (token-length (length token))
-                         (matched-region-list '()))
-                     (when (company-ofc--do-fuzzy-compare
-                            downcased-input input-length downcased-token token-length
-                            (lambda (text-idx)
-                              (setq matched-region-list (company-ofc--record-matched-region text-idx matched-region-list))))
-                       (setq info-list (append info-list (list (make-company-ofc--matched-item-info-s
-                                                                :candidate candidate
-                                                                :edis 0
-                                                                :matched-region-list matched-region-list)))))))))
+               (let ((downcased-token (downcase token))
+                     (token-length (length token))
+                     (matched-region-list '()))
+                 (when (company-ofc--do-fuzzy-compare
+                        downcased-input input-length downcased-token token-length
+                        (lambda (text-idx)
+                          (setq matched-region-list (company-ofc--record-matched-region text-idx matched-region-list))))
+                   (setq info-list (append info-list (list (make-company-ofc--matched-item-info-s
+                                                            :candidate candidate
+                                                            :edis 0
+                                                            :matched-region-list matched-region-list)))))))
              company-ofc--token-hash)
     info-list))
 
