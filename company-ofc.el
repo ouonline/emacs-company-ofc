@@ -94,29 +94,30 @@
           (setf (company-ofc--candidate-s-loc-list candidate) loc-list))))))
 
 (defun company-ofc--update-buffer-tokens (buffer)
-  (let ((new-token-set (make-hash-table :test 'company-ofc--hash-strcmp)))
-    ;; construct a new-token-set for the modified buffer
-    (company-ofc--for-each-token-in-buffer buffer
-                                           (lambda (token)
-                                             (puthash token t new-token-set)))
-    (let ((old-candidate-list (gethash buffer company-ofc--buffer2candidates '()))
-          (new-candidate-list '()))
-      (cl-dolist (candidate old-candidate-list)
-        (let* ((token (company-ofc--candidate-s-token candidate))
-               (found (gethash token new-token-set)))
-          (if found
-              ;; if a token in the new-token-set exists in the old one, delete it from new-token-set
-              ;; so that it remains unchanged in `company-ofc--token-hash`
-              (progn
-                (remhash token new-token-set)
-                (setq new-candidate-list (append new-candidate-list (list candidate))))
-            ;; otherwise remove it from `company-ofc--token-hash`
-            (company-ofc--remove-token-from-token-hash token buffer))))
-      (maphash (lambda (token unused)
-                 (let ((candidate (company-ofc--find-or-insert-token-hash token buffer)))
-                   (setq new-candidate-list (append new-candidate-list (list candidate)))))
-               new-token-set)
-      (puthash buffer new-candidate-list company-ofc--buffer2candidates))))
+  (when (> (length (buffer-name buffer)) 0)
+    (let ((new-token-set (make-hash-table :test 'company-ofc--hash-strcmp)))
+      ;; construct a new-token-set for the modified buffer
+      (company-ofc--for-each-token-in-buffer buffer
+                                             (lambda (token)
+                                               (puthash token t new-token-set)))
+      (let ((old-candidate-list (gethash buffer company-ofc--buffer2candidates '()))
+            (new-candidate-list '()))
+        (cl-dolist (candidate old-candidate-list)
+          (let* ((token (company-ofc--candidate-s-token candidate))
+                 (found (gethash token new-token-set)))
+            (if found
+                ;; if a token in the new-token-set exists in the old one, delete it from new-token-set
+                ;; so that it remains unchanged in `company-ofc--token-hash`
+                (progn
+                  (remhash token new-token-set)
+                  (setq new-candidate-list (append new-candidate-list (list candidate))))
+              ;; otherwise remove it from `company-ofc--token-hash`
+              (company-ofc--remove-token-from-token-hash token buffer))))
+        (maphash (lambda (token unused)
+                   (let ((candidate (company-ofc--find-or-insert-token-hash token buffer)))
+                     (setq new-candidate-list (append new-candidate-list (list candidate)))))
+                 new-token-set)
+        (puthash buffer new-candidate-list company-ofc--buffer2candidates)))))
 
 (defun company-ofc--init ()
   (setq-local company-ofc-token-pattern (concat "[" company-ofc-token-charset "]+"))
