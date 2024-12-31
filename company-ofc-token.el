@@ -19,9 +19,13 @@
   "minimum length of tokens that are indexed"
   :type 'integer)
 
-;; default token charset. users can change `company-ofc-token-charset` before loading this plugin.
-;; these variables are buffer-local.
-(defvar company-ofc-token-charset  "0-9a-zA-Z_")
+;; the following variables are buffer-local.
+
+;; default token charset. users can change `company-ofc-token-charset` after loading this plugin.
+(defcustom company-ofc-token-charset  "0-9a-zA-Z_"
+  "valid path characters in regexp"
+  :type 'string)
+
 (defvar company-ofc-token-pattern (concat "[" company-ofc-token-charset "]+"))
 (defvar company-ofc-token-delim (concat "[^" company-ofc-token-charset "]+"))
 (defvar company-ofc-token-enabled nil)
