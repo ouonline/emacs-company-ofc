@@ -1,6 +1,7 @@
 ;; -*- lexical-binding: t -*-
 
 (require 'cl-lib)
+(require 'company-ofc-common "./company-ofc-common.el")
 
 ;; -----------------------------------------------------------------------------
 ;; settings
@@ -29,19 +30,6 @@
 (defvar company-ofc--path-real-prefix "") ;; updated when `prefix` is called
 
 ;; -----------------------------------------------------------------------------
-
-(defun company-ofc--path-do-fuzzy-compare (pattern pattern-length text text-length)
-  "tells if `pattern` is part of `text`"
-  (if (> pattern-length text-length)
-      nil
-    (let ((text-idx 0)
-          (pattern-idx 0))
-      (while (and (< text-idx text-length)
-                  (< pattern-idx pattern-length))
-        (when (eq (elt text text-idx) (elt pattern pattern-idx))
-          (cl-incf pattern-idx))
-        (cl-incf text-idx))
-      (= pattern-idx pattern-length))))
 
 (defun company-ofc--path-grab-prefix (pattern)
   (when (looking-back pattern (line-beginning-position) t)
@@ -88,8 +76,8 @@
           (let ((last-component-length (length last-component))
                 (entry-result '()))
             (dolist (entry entry-list)
-              (when (company-ofc--path-do-fuzzy-compare last-component last-component-length
-                                                        (downcase entry) (length entry))
+              (when (company-ofc--fuzzy-compare last-component last-component-length
+                                                (downcase entry) (length entry))
                 (push entry entry-result)))
             entry-result))))))
 

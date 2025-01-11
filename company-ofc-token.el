@@ -1,6 +1,7 @@
 ;; -*- lexical-binding: t -*-
 
 (require 'cl-lib)
+(require 'company-ofc-common "./company-ofc-common.el")
 
 ;; -----------------------------------------------------------------------------
 ;; settings
@@ -151,20 +152,6 @@
                               (when company-ofc-token-enabled
                                 (company-ofc--token-destroy-buffer-tokens (current-buffer)))))
 
-(defun company-ofc--token-do-fuzzy-compare (pattern pattern-length text text-length &optional matched-hook-func)
-  "tells if `pattern` is part of `text`."
-  (when (<= pattern-length text-length)
-    (let ((text-idx 0)
-          (pattern-idx 0))
-      (while (and (< text-idx text-length)
-                  (< pattern-idx pattern-length))
-        (when (eq (elt text text-idx) (elt pattern pattern-idx))
-          (when matched-hook-func
-            (funcall matched-hook-func text-idx))
-          (cl-incf pattern-idx))
-        (cl-incf text-idx))
-      (= pattern-idx pattern-length))))
-
 (defun company-ofc--token-get-annotation (token)
   (let ((item (car company-ofc--token-matched-item-stack)))
     (cl-dolist (info (company-ofc--token-matched-item-s-info-list item))
@@ -192,7 +179,7 @@
                (let ((downcased-token (downcase token))
                      (token-length (length token))
                      (matched-region-list '()))
-                 (when (company-ofc--token-do-fuzzy-compare
+                 (when (company-ofc--fuzzy-compare
                         downcased-input input-length downcased-token token-length
                         (lambda (text-idx)
                           (setq matched-region-list (company-ofc--token-record-matched-region text-idx matched-region-list))))
@@ -211,7 +198,7 @@
                    (downcased-token (downcase (company-ofc--token-candidate-s-token candidate)))
                    (token-length (length downcased-token))
                    (matched-region-list '()))
-              (when (company-ofc--token-do-fuzzy-compare
+              (when (company-ofc--fuzzy-compare
                      downcased-input input-length downcased-token token-length
                      (lambda (text-idx)
                        (setq matched-region-list (company-ofc--token-record-matched-region text-idx matched-region-list))))
@@ -227,7 +214,7 @@
   (cl-dolist (item company-ofc--token-matched-item-stack)
     (let ((pre-substr (company-ofc--token-matched-item-s-downcased-input item)))
       ;; better to use this predicate, but a len-based one is also ok here
-      ;; (company-ofc--token-do-fuzzy-compare pre-substr (length pre-substr) downcased-input input-length)
+      ;; (company-ofc--fuzzy-compare pre-substr (length pre-substr) downcased-input input-length)
       (when (< (length pre-substr) input-length)
         (cl-return item)))))
 
@@ -321,8 +308,8 @@
   (let ((suffix (company-ofc--token-grab-suffix company-ofc-token-pattern)))
     (when suffix
       (let ((suffix-length (length suffix)))
-        (when (company-ofc--token-do-fuzzy-compare (downcase suffix) suffix-length
-                                                   (downcase token) (length token))
+        (when (company-ofc--fuzzy-compare (downcase suffix) suffix-length
+                                          (downcase token) (length token))
           (delete-char suffix-length)))))
   ;; clear matched candidates
   (setq company-ofc--token-matched-item-stack '()))
