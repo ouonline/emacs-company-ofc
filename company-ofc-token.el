@@ -62,11 +62,6 @@
 
 ;; -----------------------------------------------------------------------------
 
-(defun company-ofc--token-find-candidate-in-list (token candidate-list)
-  (cl-dolist (candidate candidate-list)
-    (when (string= token (company-ofc--token-candidate-s-token candidate))
-      (cl-return candidate))))
-
 (defun company-ofc--token-buffer2string (buffer)
   (with-current-buffer buffer
     (save-restriction
@@ -104,7 +99,8 @@
       ;; construct a new-token-set for the modified buffer
       (company-ofc--token-for-each-token-in-buffer buffer
                                                    (lambda (token)
-                                                     (puthash token t new-token-set)))
+                                                     (when (>= (length token) company-ofc-token-min-len)
+                                                       (puthash token t new-token-set))))
       (let ((old-candidate-list (gethash buffer company-ofc--token-buffer2candidates '()))
             (new-candidate-list '()))
         (cl-dolist (candidate old-candidate-list)
