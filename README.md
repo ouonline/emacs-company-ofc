@@ -24,7 +24,7 @@ Candidates are case sensitive but the matching behavior is not. Modified or newl
 (add-hook 'prog-mode-hook (lambda ()
                             (setq-local company-backends '(company-ofc-path company-ofc-token))
                             (when (member major-mode '(emacs-lisp-mode))
-                              (setq-local company-ofc-token-charset (concat company-ofc-token-charset "-")))
+                              (setq-local ofc-token-charset (concat ofc-token-charset "-")))
                             (company-mode)))
 (add-hook 'shell-mode-hook (lambda ()
                             (setq-local company-backends '(company-ofc-path))

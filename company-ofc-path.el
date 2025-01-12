@@ -1,7 +1,7 @@
 ;; -*- lexical-binding: t -*-
 
 (require 'cl-lib)
-(require 'company-ofc-common "./company-ofc-common.el")
+(require 'ofc-common "./ofc-common.el")
 
 ;; -----------------------------------------------------------------------------
 ;; settings
@@ -76,8 +76,8 @@
           (let ((last-component-length (length last-component))
                 (entry-result '()))
             (dolist (entry entry-list)
-              (when (company-ofc--fuzzy-compare last-component last-component-length
-                                                (downcase entry) (length entry))
+              (when (ofc--fuzzy-compare last-component last-component-length
+                                        (downcase entry) (length entry))
                 (push entry entry-result)))
             entry-result))))))
 

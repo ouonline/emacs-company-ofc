@@ -1,4 +1,4 @@
-(defun company-ofc--fuzzy-compare (pattern pattern-length text text-length &optional matched-hook-func)
+(defun ofc--fuzzy-compare (pattern pattern-length text text-length &optional matched-hook-func)
   "tells if `pattern` is part of `text`."
   (when (<= pattern-length text-length)
     (let ((text-idx 0)
@@ -12,4 +12,4 @@
         (cl-incf text-idx))
       (= pattern-idx pattern-length))))
 
-(provide 'company-ofc-common)
+(provide 'ofc-common)
