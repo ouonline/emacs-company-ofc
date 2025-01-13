@@ -1,3 +1,5 @@
+;; -*- lexical-binding: t -*-
+
 (require 'cl-lib)
 (require 'ofc-common "./ofc-common.el")
 
@@ -23,13 +25,11 @@
 ;; `buffer-list' is a list of buffer(s) where this token occurs.
 (cl-defstruct ofc-token--token-info-s token used-freq buffer-list)
 
-;; `token-info' is an instance of `ofc-token--token-info-s'.
-;; `edit-distance' is the edit distance between this token and the current input.
-;; `matched-region-list' is a list with the form `((begin1 . end1) (begin2 . end2) ...)`
-(cl-defstruct ofc-token--matched-item-info-s token-info edit-distance matched-region-list)
-
-;; `info-list' is a list of `ofc-token--matched-item-info-s' instances.
-(cl-defstruct ofc-token--matched-item-s downcased-input info-list)
+;; `candidate-list' is a list of tokens, each of which has the following text properties:
+;;   * `token-info': an instance of `ofc-token--token-info-s'.
+;;   * `edit-distance': the edit distance between this token and the current input.
+;;   * `matched-region-list': a list with the form `((begin1 . end1) (begin2 . end2) ...)`
+(cl-defstruct ofc-token--matched-item-s downcased-input candidate-list)
 
 ;; ------------------------------------------------------------------------- ;;
 ;; global variables
@@ -142,9 +142,9 @@
           matched-region-list)
       (append matched-region-list (list (cons text-idx (+ 1 text-idx)))))))
 
-(defun ofc-token--generate-matched-item-info-list-from-scratch (downcased-input input-length)
-  "creates a list of `ofc-token--matched-item-info-s` instances."
-  (let ((info-list '()))
+(defun ofc-token--generate-candidate-list-from-scratch (downcased-input input-length)
+  "creates a list of token candidates."
+  (let ((candidate-list '()))
     (maphash (lambda (token token-info)
                (let ((downcased-token (downcase token))
                      (token-length (length token))
@@ -153,32 +153,35 @@
                         downcased-input input-length downcased-token token-length
                         (lambda (text-idx)
                           (setq matched-region-list (ofc-token--record-matched-region text-idx matched-region-list))))
-                   (setq info-list (append info-list (list (make-ofc-token--matched-item-info-s
-                                                            :token-info token-info
-                                                            :edit-distance 0
-                                                            :matched-region-list matched-region-list)))))))
+                   (let ((candidate-token (substring-no-properties token)))
+                     (add-text-properties 0 token-length (list :token-info token-info
+                                                               :edit-distance 0
+                                                               :matched-region-list matched-region-list)
+                                          candidate-token)
+                     (setq candidate-list (append candidate-list (list candidate-token)))))))
              ofc-token--token-hash)
-    info-list))
+    candidate-list))
 
-(defun ofc-token--generate-matched-item-info-list-from-another (downcased-input input-length another-info-list)
-  "creates a new `ofc-token--matched-item-info-s` list from another."
-  (let ((info-list '()))
-    (mapc (lambda (info)
-            (let* ((token-info (ofc-token--matched-item-info-s-token-info info))
-                   (downcased-token (downcase (ofc-token--token-info-s-token token-info)))
-                   (token-length (length downcased-token))
+(defun ofc-token--generate-candidate-list-from-another (downcased-input input-length another-candidate-list)
+  "creates a new candidate list from another."
+  (let ((candidate-list '()))
+    (mapc (lambda (candidate-token)
+            (let* ((token-info (get-text-property 0 :token-info candidate-token))
+                   (downcased-token (downcase candidate-token))
+                   (token-length (length candidate-token))
                    (matched-region-list '()))
               (when (ofc--fuzzy-compare
                      downcased-input input-length downcased-token token-length
                      (lambda (text-idx)
                        (setq matched-region-list (ofc-token--record-matched-region text-idx matched-region-list))))
-                (setq info-list (append info-list
-                                        (list (make-ofc-token--matched-item-info-s
-                                               :token-info token-info
-                                               :edit-distance 0
-                                               :matched-region-list matched-region-list)))))))
-          another-info-list)
-    info-list))
+                (let ((new-candidate-token (substring-no-properties candidate-token)))
+                  (add-text-properties 0 token-length (list :token-info token-info
+                                                            :edit-distance 0
+                                                            :matched-region-list matched-region-list)
+                                       new-candidate-token)
+                  (setq candidate-list (append candidate-list (list new-candidate-token)))))))
+          another-candidate-list)
+    candidate-list))
 
 (defun ofc-token--find-matched-item-in-stack (input-length)
   (cl-dolist (item ofc-token--matched-stack)
@@ -213,38 +216,38 @@
       (ofc-token--do-calc-edit-distance b b-len a a-len)
     (ofc-token--do-calc-edit-distance a a-len b b-len)))
 
-(defun ofc-token--sort-matched-item-info-list (input input-length matched-item-info-list)
+(defun ofc-token--sort-candidate-list (input input-length candidate-list)
   "sort matched infos by their edit-distances and used-frequencies."
-  (cl-dolist (info matched-item-info-list)
-    (let* ((token-info (ofc-token--matched-item-info-s-token-info info))
-           (token (ofc-token--token-info-s-token token-info)))
-      (setf (ofc-token--matched-item-info-s-edit-distance info)
-            (ofc-token--calc-edit-distance input input-length
-                                           token (length token)))))
-  (cl-stable-sort matched-item-info-list
+  (cl-dolist (candidate-token candidate-list)
+    (let ((token-info (get-text-property 0 :token-info candidate-token))
+          (token-length (length candidate-token)))
+      (put-text-property 0 token-length
+                         :edit-distance (ofc-token--calc-edit-distance input input-length
+                                                                       candidate-token token-length)
+                         candidate-token)))
+  (cl-stable-sort candidate-list
                   (lambda (a b)
-                    (let ((freq-a (ofc-token--token-info-s-used-freq (ofc-token--matched-item-info-s-token-info a)))
-                          (freq-b (ofc-token--token-info-s-used-freq (ofc-token--matched-item-info-s-token-info b))))
+                    (let ((freq-a (ofc-token--token-info-s-used-freq (get-text-property 0 :token-info a)))
+                          (freq-b (ofc-token--token-info-s-used-freq (get-text-property 0 :token-info b))))
                       (if (> freq-a freq-b)
                           t
                         (when (= freq-a freq-b)
-                          (< (ofc-token--matched-item-info-s-edit-distance a)
-                             (ofc-token--matched-item-info-s-edit-distance b))))))))
+                          (< (get-text-property 0 :edit-distance a)
+                             (get-text-property 0 :edit-distance b))))))))
 
 (defun ofc-token--grab-suffix (pattern)
   (when (looking-at pattern)
     (match-string 0)))
 
-(defun ofc-token--do-post-completion (token-info)
+(defun ofc-token--post-completion (candidate-token)
   ;; update frequency of the matched token info
-  (cl-incf (ofc-token--token-info-s-used-freq token-info))
+  (cl-incf (ofc-token--token-info-s-used-freq (get-text-property 0 :token-info candidate-token)))
   ;; remove overlapping suffix
   (let ((suffix (ofc-token--grab-suffix ofc-token-pattern)))
     (when suffix
-      (let ((token (ofc-token--token-info-s-token token-info))
-            (suffix-length (length suffix)))
+      (let ((suffix-length (length suffix)))
         (when (ofc--fuzzy-compare (downcase suffix) suffix-length
-                                  (downcase token) (length token))
+                                  (downcase candidate-token) (length candidate-token))
           (delete-char suffix-length)))))
   ;; clear matched token info
   (setq ofc-token--matched-stack '()))
@@ -253,24 +256,22 @@
   (when (looking-back pattern (line-beginning-position) t)
     (match-string 0)))
 
-(defun ofc-token--do-find-candidates (input create-candidate-func)
+(defun ofc-token--find-candidates (input)
   (let ((input-length (length input)))
     (if (< input-length ofc-token-min-trigger-len)
         (setq ofc-token--matched-stack '()) ;; clear matched items
       (let ((downcased-input (downcase input))
             (matched-item (ofc-token--find-matched-item-in-stack input-length))
-            (info-list '()))
+            (candidate-list '()))
         (if matched-item
-            (setq info-list (ofc-token--generate-matched-item-info-list-from-another downcased-input input-length
-                                                                                     (ofc-token--matched-item-s-info-list matched-item)))
-          (setq info-list (ofc-token--generate-matched-item-info-list-from-scratch downcased-input input-length)))
-        (when info-list
-          (setq info-list (ofc-token--sort-matched-item-info-list input input-length info-list))
-          (push (make-ofc-token--matched-item-s :downcased-input downcased-input :info-list info-list)
+            (setq candidate-list (ofc-token--generate-candidate-list-from-another downcased-input input-length
+                                                                                  (ofc-token--matched-item-s-candidate-list matched-item)))
+          (setq candidate-list (ofc-token--generate-candidate-list-from-scratch downcased-input input-length)))
+        (when candidate-list
+          (setq candidate-list (ofc-token--sort-candidate-list input input-length candidate-list))
+          (push (make-ofc-token--matched-item-s :downcased-input downcased-input :candidate-list candidate-list)
                 ofc-token--matched-stack)
-          (mapcar (lambda (info)
-                    (funcall create-candidate-func info))
-                  info-list))))))
+          candidate-list)))))
 
 (defun ofc-token--after-buffer-created ()
   (when (local-variable-p 'ofc-token-charset)
