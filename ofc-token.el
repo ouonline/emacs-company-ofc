@@ -119,17 +119,6 @@
             token-info-list)
       (remhash buffer ofc-token--buffer2tokens))))
 
-(defun ofc-token--after-buffer-saved ()
-  (setq ofc-token--matched-stack '()) ;; clear matched stack
-  (ofc-token--update-buffer-tokens (current-buffer)))
-
-(add-hook 'after-save-hook #'ofc-token--after-buffer-saved 0 t)
-
-(defun ofc-token--before-buffer-killed ()
-  (ofc-token--destroy-buffer-tokens (current-buffer)))
-
-(add-hook 'kill-buffer-hook #'ofc-token--before-buffer-killed 0 t)
-
 (defun ofc-token--record-matched-region (text-idx matched-region-list)
   "updates the matched regions in the form of `((begin1 . end1) (begin2 . end2))`
  and returns it."
@@ -273,10 +262,19 @@
                 ofc-token--matched-stack)
           candidate-list)))))
 
+(defun ofc-token--after-buffer-saved ()
+  (setq ofc-token--matched-stack '()) ;; clear matched stack
+  (ofc-token--update-buffer-tokens (current-buffer)))
+
+(defun ofc-token--before-buffer-killed ()
+  (ofc-token--destroy-buffer-tokens (current-buffer)))
+
 (defun ofc-token--after-buffer-created ()
   (when (local-variable-p 'ofc-token-charset)
     (setq-local ofc-token-pattern (concat "[" ofc-token-charset "]+"))
     (setq-local ofc-token-delim (concat "[^" ofc-token-charset "]+")))
+  (add-hook 'after-save-hook #'ofc-token--after-buffer-saved 0 t)
+  (add-hook 'kill-buffer-hook #'ofc-token--before-buffer-killed 0 t)
   (ofc-token--update-buffer-tokens (current-buffer)))
 
 (provide 'ofc-token)
