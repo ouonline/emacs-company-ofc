@@ -226,7 +226,7 @@
 
 (defun ofc-token--grab-suffix (pattern)
   (when (looking-at pattern)
-    (match-string 0)))
+    (match-string-no-properties 0)))
 
 (defun ofc-token--post-completion (candidate-token)
   ;; update frequency of the matched token info
@@ -243,7 +243,7 @@
 
 (defun ofc-token--grab-prefix (pattern)
   (when (looking-back pattern (line-beginning-position) t)
-    (match-string 0)))
+    (match-string-no-properties 0)))
 
 (defun ofc-token--find-candidates (input)
   (let ((input-length (length input)))
