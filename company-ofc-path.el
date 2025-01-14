@@ -33,7 +33,7 @@
 
 (defun company-ofc--path-grab-prefix (pattern)
   (when (looking-back pattern (line-beginning-position) t)
-    (let ((prefix (match-string 0)))
+    (let ((prefix (match-string-no-properties 0)))
       (when (string-match-p "/" prefix)
         ;; returns a pseudo prefix to make tooltip shown at the proper position and
         ;; stores the real prefix in `company-ofc--path-real-prefix`
