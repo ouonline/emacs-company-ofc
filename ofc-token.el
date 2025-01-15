@@ -12,12 +12,6 @@
 ;; minimum length of tokens that are indexed
 (defvar ofc-token-min-len 4)
 
-;; default token charset. users can change `ofc-token-charset' after loading this plugin.
-(defvar ofc-token-charset  "0-9a-zA-Z_")
-
-(defvar ofc-token-pattern (concat "[" ofc-token-charset "]+"))
-(defvar ofc-token-delim (concat "[^" ofc-token-charset "]+"))
-
 ;; ------------------------------------------------------------------------- ;;
 ;; struct definitions
 
@@ -49,15 +43,20 @@
 
 ;; ------------------------------------------------------------------------- ;;
 
-(defun ofc-token--buffer2string (buffer)
-  (with-current-buffer buffer
-    (save-restriction
-      (widen)
-      (buffer-substring-no-properties (point-min) (point-max)))))
-
 (defun ofc-token--for-each-token-in-buffer (buffer callback-func)
-  (cl-dolist (token (split-string (ofc-token--buffer2string buffer) ofc-token-delim t))
-    (funcall callback-func token)))
+  (with-current-buffer buffer
+    (let ((end (point-max)))
+      (save-excursion
+        (goto-char (point-min))
+        (while (< (point) end)
+          (skip-syntax-forward " ") ;; skip over whitespace and other non-symbol characters
+          (let ((symbol-start (point)))
+            (skip-syntax-forward "w_")
+            (let ((symbol-end (point)))
+              (if (> symbol-end symbol-start)
+                  (funcall callback-func (buffer-substring-no-properties symbol-start symbol-end))
+                (when (< symbol-end end)
+                  (forward-char))))))))))
 
 (defun ofc-token--find-or-insert-token-hash (token buffer)
   "finds or inserts an instance of `ofc-token--token-info-s' for the specified token in
@@ -208,8 +207,7 @@
 (defun ofc-token--sort-candidate-list (input input-length candidate-list)
   "sort matched infos by their edit-distances and used-frequencies."
   (cl-dolist (candidate-token candidate-list)
-    (let ((token-info (get-text-property 0 :token-info candidate-token))
-          (token-length (length candidate-token)))
+    (let ((token-length (length candidate-token)))
       (put-text-property 0 token-length
                          :edit-distance (ofc-token--calc-edit-distance input input-length
                                                                        candidate-token token-length)
@@ -224,15 +222,16 @@
                           (< (get-text-property 0 :edit-distance a)
                              (get-text-property 0 :edit-distance b))))))))
 
-(defun ofc-token--grab-suffix (pattern)
-  (when (looking-at pattern)
-    (match-string-no-properties 0)))
+(defun ofc-token--grab-suffix ()
+  (buffer-substring-no-properties (point)
+                                  (save-excursion (skip-syntax-forward "w_")
+                                                  (point))))
 
 (defun ofc-token--post-completion (candidate-token)
   ;; update frequency of the matched token info
   (cl-incf (ofc-token--token-info-s-used-freq (get-text-property 0 :token-info candidate-token)))
   ;; remove overlapping suffix
-  (let ((suffix (ofc-token--grab-suffix ofc-token-pattern)))
+  (let ((suffix (ofc-token--grab-suffix)))
     (when suffix
       (let ((suffix-length (length suffix)))
         (when (ofc--fuzzy-compare (downcase suffix) suffix-length
@@ -241,9 +240,10 @@
   ;; clear matched token info
   (setq ofc-token--matched-stack '()))
 
-(defun ofc-token--grab-prefix (pattern)
-  (when (looking-back pattern (line-beginning-position) t)
-    (match-string-no-properties 0)))
+(defun ofc-token--grab-prefix ()
+  (buffer-substring-no-properties (point)
+                                  (save-excursion (skip-syntax-backward "w_")
+                                                  (point))))
 
 (defun ofc-token--find-candidates (input)
   (let ((input-length (length input)))
@@ -270,9 +270,6 @@
   (ofc-token--destroy-buffer-tokens (current-buffer)))
 
 (defun ofc-token--after-buffer-created ()
-  (when (local-variable-p 'ofc-token-charset)
-    (setq-local ofc-token-pattern (concat "[" ofc-token-charset "]+"))
-    (setq-local ofc-token-delim (concat "[^" ofc-token-charset "]+")))
   (add-hook 'after-save-hook #'ofc-token--after-buffer-saved 0 t)
   (add-hook 'kill-buffer-hook #'ofc-token--before-buffer-killed 0 t)
   (ofc-token--update-buffer-tokens (current-buffer)))

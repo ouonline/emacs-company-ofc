@@ -7,7 +7,7 @@
   (interactive (list 'interactive))
   (cl-case command
     (init (ofc-token--after-buffer-created))
-    (prefix (ofc-token--grab-prefix ofc-token-pattern))
+    (prefix (ofc-token--grab-prefix))
     (candidates (ofc-token--find-candidates arg))
     (match (get-text-property 0 :matched-region-list arg))
     (annotation (let* ((token-info (get-text-property 0 :token-info arg))
