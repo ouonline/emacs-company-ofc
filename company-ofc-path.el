@@ -40,7 +40,9 @@
         (if (string-prefix-p "~/" prefix)
             (setq company-ofc--path-real-prefix (concat (substitute-in-file-name "$HOME/")
                                                         (substring-no-properties prefix 2)))
-          (setq company-ofc--path-real-prefix prefix))
+          (if (eq (aref prefix 0) ?/)
+              (setq company-ofc--path-real-prefix prefix)
+            (setq company-ofc--path-real-prefix (concat default-directory "/" prefix))))
         (file-name-nondirectory prefix)))))
 
 (defun company-ofc--path-find-entry-list-in-stack (parent-dir)
