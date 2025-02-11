@@ -207,7 +207,8 @@
                                                                                   (ofc-token--matched-item-s-candidate-list matched-item)))
           (setq candidate-list (ofc-token--generate-candidate-list-from-scratch downcased-input input-length)))
         (when candidate-list
-          (setq candidate-list (ofc-token--sort-candidate-list input input-length candidate-list))
+          (when (> (length candidate-list) 1)
+            (setq candidate-list (ofc-token--sort-candidate-list input input-length candidate-list)))
           (push (make-ofc-token--matched-item-s :downcased-input downcased-input :candidate-list candidate-list)
                 ofc-token--matched-stack)
           candidate-list)))))
