@@ -177,38 +177,13 @@
       (when (< (length pre-substr) input-length)
         (cl-return item)))))
 
-(defun ofc-token--do-calc-edit-distance (a a-len b b-len)
-  (let ((a-seq (number-sequence 1 a-len))
-        (b-seq (number-sequence 1 b-len))
-        (dis-vec (make-vector (+ 1 b-len) 0)))
-    (cl-dolist (i b-seq)
-      (aset dis-vec i i))
-    (cl-dolist (i a-seq)
-      (let ((old (- i 1)))
-        (aset dis-vec 0 i)
-        (cl-dolist (j b-seq)
-          (let ((tmp (aref dis-vec j)))
-            (if (eq (elt a (- i 1))
-                    (elt b (- j 1)))
-                (aset dis-vec j old)
-              (aset dis-vec j (+ 1 (min (aref dis-vec j)
-                                        (aref dis-vec (- j 1))
-                                        old))))
-            (setq old tmp)))))
-    (aref dis-vec b-len)))
-
-(defun ofc-token--calc-edit-distance (a a-len b b-len)
-  (if (< a-len b-len)
-      (ofc-token--do-calc-edit-distance b b-len a a-len)
-    (ofc-token--do-calc-edit-distance a a-len b b-len)))
-
 (defun ofc-token--sort-candidate-list (input input-length candidate-list)
   "sort matched infos by their edit-distances and used-frequencies."
   (cl-dolist (candidate-token candidate-list)
     (let ((token-length (length candidate-token)))
       (put-text-property 0 token-length
-                         :edit-distance (ofc-token--calc-edit-distance input input-length
-                                                                       candidate-token token-length)
+                         :edit-distance (ofc--calc-edit-distance input input-length
+                                                                 candidate-token token-length)
                          candidate-token)))
   (cl-stable-sort candidate-list
                   (lambda (a b)
