@@ -19,7 +19,7 @@
 ;; `buffer-list' is a list of buffer(s) where this token occurs.
 (cl-defstruct ofc-token--token-info-s token used-freq buffer-list)
 
-;; `candidate-list' is a list of tokens, each of which has the following text properties:
+;; `candidate-list' is a list of strings, each of which has the following text properties:
 ;;   * `token-info': an instance of `ofc-token--token-info-s'.
 ;;   * `edit-distance': the edit distance between this token and the current input.
 ;;   * `matched-region-list': a list with the form `((begin1 . end1) (begin2 . end2) ...)`
@@ -172,8 +172,9 @@
 (defun ofc-token--find-matched-item-in-stack (input-length)
   (cl-dolist (item ofc-token--matched-stack)
     (let ((pre-substr (ofc-token--matched-item-s-downcased-input item)))
-      ;; better to use this predicate, but a len-based one is also ok here
-      ;; (ofc--fuzzy-compare pre-substr (length pre-substr) downcased-input input-length)
+      ;; better to use this predicate:
+      ;;   (ofc--fuzzy-compare pre-substr (length pre-substr) downcased-input input-length)
+      ;; but a len-based one is also ok here
       (when (< (length pre-substr) input-length)
         (cl-return item)))))
 
