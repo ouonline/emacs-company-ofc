@@ -78,6 +78,7 @@
     (prefix (ofc-path--grab-prefix ofc-path-token-pattern))
     (candidates (ofc-path--find-candidates arg))
     (post-completion (ofc-path--post-completion arg))
+    (require-match 'never)
     (sorted t)
     (no-cache t)))
 
