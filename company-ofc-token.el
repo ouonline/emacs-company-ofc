@@ -14,6 +14,7 @@
                        (buffer (car (ofc-token--token-info-s-buffer-list token-info))))
                   (concat "[" (buffer-name buffer) "]")))
     (post-completion (ofc-token--post-completion arg))
+    (require-match 'never)
     (sorted t) ;; tell company not to sort the result again
     (no-cache t)))
 
