@@ -80,7 +80,7 @@
           (setf (ofc-token--token-info-s-buffer-list token-info) buffer-list))))))
 
 (defun ofc-token--update-buffer-tokens (buffer)
-  (when (> (length (buffer-name buffer)) 0)
+  (unless (string-match-p "*temp*" (buffer-name buffer))
     (let ((new-token-set (make-hash-table :test 'ofc-token--token-hash-strcmp)))
       ;; construct a new-token-set for the modified buffer
       (ofc-token--for-each-token-in-buffer buffer
