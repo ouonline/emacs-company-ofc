@@ -7,7 +7,7 @@
 ;; settings
 
 ;; minimum length to trigger completion
-(defvar ofc-token-min-trigger-len 3)
+(defvar ofc-token-min-trigger-len 4)
 
 ;; minimum length of tokens that are indexed
 (defvar ofc-token-min-len 4)
