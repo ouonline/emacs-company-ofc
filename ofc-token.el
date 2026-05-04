@@ -89,17 +89,18 @@
                                                (puthash token t new-token-set))))
       (let ((old-token-info-list (gethash buffer ofc-token--buffer2tokens '()))
             (new-token-info-list '()))
-        (cl-dolist (token-info old-token-info-list)
-          (let* ((token (ofc-token--token-info-s-token token-info))
-                 (found (gethash token new-token-set)))
-            (if found
-                ;; if a token in the new-token-set exists in the old one, delete it from new-token-set
-                ;; so that it remains unchanged in `ofc-token--token-hash`
-                (progn
-                  (remhash token new-token-set)
-                  (setq new-token-info-list (append new-token-info-list (list token-info))))
-              ;; otherwise remove it from `ofc-token--token-hash`
-              (ofc-token--remove-token-from-token-hash token buffer))))
+        (mapc (lambda (token-info)
+                (let* ((token (ofc-token--token-info-s-token token-info))
+                       (found (gethash token new-token-set)))
+                  (if found
+                      ;; if a token in the new-token-set exists in the old one, delete it from new-token-set
+                      ;; so that it remains unchanged in `ofc-token--token-hash`
+                      (progn
+                        (remhash token new-token-set)
+                        (setq new-token-info-list (append new-token-info-list (list token-info))))
+                    ;; otherwise remove it from `ofc-token--token-hash`
+                    (ofc-token--remove-token-from-token-hash token buffer))))
+              old-token-info-list)
         (maphash (lambda (token _)
                    (let ((token-info (ofc-token--find-or-insert-token-hash token buffer)))
                      (setq new-token-info-list (append new-token-info-list (list token-info)))))
@@ -141,7 +142,6 @@
              (setq matched-region-list (ofc-token--record-matched-region text-idx matched-region-list))))
       (let ((new-candidate-token (substring-no-properties token)))
         (add-text-properties 0 token-length (list :token-info token-info
-                                                  :edit-distance 0
                                                   :matched-region-list matched-region-list)
                              new-candidate-token)
         new-candidate-token))))
@@ -180,12 +180,13 @@
 
 (defun ofc-token--sort-candidate-list (input input-length candidate-list)
   "sort matched infos by their edit-distances and used-frequencies."
-  (cl-dolist (candidate-token candidate-list)
-    (let ((token-length (length candidate-token)))
-      (put-text-property 0 token-length
-                         :edit-distance (ofc--calc-edit-distance input input-length
-                                                                 candidate-token token-length)
-                         candidate-token)))
+  (mapc (lambda (candidate-token)
+          (let ((token-length (length candidate-token)))
+            (put-text-property 0 token-length
+                               :edit-distance (ofc--calc-edit-distance input input-length
+                                                                       candidate-token token-length)
+                               candidate-token)))
+        candidate-list)
   (cl-stable-sort candidate-list
                   (lambda (a b)
                     (let ((freq-a (ofc-token--token-info-s-used-freq (get-text-property 0 :token-info a)))
