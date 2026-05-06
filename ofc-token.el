@@ -62,7 +62,7 @@
   "finds or inserts an instance of `ofc-token--token-info-s' for the specified token in
  `ofc-token--token-hash' and returns that instance."
   (let ((token-info (gethash token ofc-token--token-hash)))
-    (when (not token-info)
+    (unless token-info
       (setq token-info (make-ofc-token--token-info-s :token token :used-freq 0 :buffer-list '()))
       (puthash token token-info ofc-token--token-hash))
     (let ((buffer-list (ofc-token--token-info-s-buffer-list token-info)))
@@ -216,14 +216,20 @@
           candidate-list)))))
 
 (defun ofc-token--grab-prefix ()
-  (buffer-substring-no-properties (point)
-                                  (save-excursion (skip-syntax-backward "w_")
-                                                  (point))))
+  (let ((prefix (buffer-substring-no-properties
+                 (point)
+                 (save-excursion (skip-syntax-backward "w_")
+                                 (point)))))
+    (unless (string-empty-p prefix)
+      prefix)))
 
 (defun ofc-token--grab-suffix ()
-  (buffer-substring-no-properties (point)
-                                  (save-excursion (skip-syntax-forward "w_")
-                                                  (point))))
+  (let ((suffix (buffer-substring-no-properties
+                 (point)
+                 (save-excursion (skip-syntax-forward "w_")
+                                 (point)))))
+    (unless (string-empty-p suffix)
+      suffix)))
 
 (defun ofc-token--post-completion (candidate-token)
   ;; update frequency of the matched token info
