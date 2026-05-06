@@ -22,7 +22,7 @@ Candidates are case sensitive but the matching behavior is not. Modified or newl
 (add-to-list 'load-path "/path/to/emacs-company-ofc")
 
 (add-hook 'prog-mode-hook (lambda ()
-                            (setq-local company-backends '(company-ofc-path company-ofc-token))
+                            (setq-local company-backends '(company-ofc-token company-ofc-path))
                             (company-mode)))
 (add-hook 'shell-mode-hook (lambda ()
                             (setq-local company-backends '(company-ofc-path))
