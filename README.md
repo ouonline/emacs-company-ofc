@@ -19,7 +19,12 @@ Candidates are case sensitive but the matching behavior is not. Modified or newl
 ```lisp
 ;; company mode settings example
 
+;; for eamcs version < 29
 (add-to-list 'load-path "/path/to/emacs-company-ofc")
+
+;; for emacs version >= 29
+(unless (package-installed-p 'emacs-company-ofc)
+  (package-vc-install "https://github.com/ouonline/emacs-company-ofc"))
 
 (add-hook 'prog-mode-hook (lambda ()
                             (setq-local company-backends '(company-ofc-token company-ofc-path))
