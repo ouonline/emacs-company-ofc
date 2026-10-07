@@ -146,26 +146,28 @@
                              new-candidate-token)
         new-candidate-token))))
 
-(defun ofc-token--generate-candidate-list-from-scratch (downcased-input input-length)
+(defun ofc-token--generate-candidate-list-from-scratch (downcased-input input-length predicate)
   "creates a list of token candidates."
   (let ((candidate-list '()))
     (maphash (lambda (token token-info)
-               (let ((new-candidate-token (ofc-token--do-gen-candidate downcased-input input-length
-                                                                       token token-info)))
-                 (when new-candidate-token
-                   (setq candidate-list (append candidate-list (list new-candidate-token))))))
+               (when (funcall predicate token)
+                 (let ((new-candidate-token (ofc-token--do-gen-candidate downcased-input input-length
+                                                                         token token-info)))
+                   (when new-candidate-token
+                     (setq candidate-list (append candidate-list (list new-candidate-token)))))))
              ofc-token--token-hash)
     candidate-list))
 
-(defun ofc-token--generate-candidate-list-from-another (downcased-input input-length another-candidate-list)
+(defun ofc-token--generate-candidate-list-from-another (downcased-input input-length another-candidate-list predicate)
   "creates a new candidate list from another."
   (let ((candidate-list '()))
     (mapc (lambda (candidate-token)
-            (let* ((token-info (get-text-property 0 :token-info candidate-token))
-                   (new-candidate-token (ofc-token--do-gen-candidate downcased-input input-length
-                                                                     candidate-token token-info)))
-              (when new-candidate-token
-                (setq candidate-list (append candidate-list (list new-candidate-token))))))
+            (when (funcall predicate candidate-token)
+              (let* ((token-info (get-text-property 0 :token-info candidate-token))
+                     (new-candidate-token (ofc-token--do-gen-candidate downcased-input input-length
+                                                                       candidate-token token-info)))
+                (when new-candidate-token
+                  (setq candidate-list (append candidate-list (list new-candidate-token)))))))
           another-candidate-list)
     candidate-list))
 
@@ -197,20 +199,23 @@
                           (< (get-text-property 0 :edit-distance a)
                              (get-text-property 0 :edit-distance b))))))))
 
-(defun ofc-token--find-candidates (input)
-  (let ((input-length (length input)))
+(defun ofc-token--find-candidates (input &optional predicate)
+  (let ((input-length (length input))
+        (actual-pred (or predicate (lambda (_) t))))
     (if (< input-length ofc-token-min-trigger-len)
         (setq ofc-token--matched-stack '()) ;; clear matched items
       (let ((downcased-input (downcase input))
             (matched-item (ofc-token--find-matched-item-in-stack input-length))
             (candidate-list '()))
         (if matched-item
-            (setq candidate-list (ofc-token--generate-candidate-list-from-another downcased-input input-length
-                                                                                  (ofc-token--matched-item-s-candidate-list matched-item)))
-          (setq candidate-list (ofc-token--generate-candidate-list-from-scratch downcased-input input-length)))
+            (setq candidate-list
+                  (ofc-token--generate-candidate-list-from-another
+                   downcased-input input-length
+                   (ofc-token--matched-item-s-candidate-list matched-item)
+                   actual-pred))
+          (setq candidate-list
+                (ofc-token--generate-candidate-list-from-scratch downcased-input input-length actual-pred)))
         (when candidate-list
-          (when (> (length candidate-list) 1)
-            (setq candidate-list (ofc-token--sort-candidate-list input input-length candidate-list)))
           (push (make-ofc-token--matched-item-s :downcased-input downcased-input :candidate-list candidate-list)
                 ofc-token--matched-stack)
           candidate-list)))))

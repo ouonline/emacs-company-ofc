@@ -13,6 +13,9 @@
               (when prefix
                 (setq company-ofc-token--current-candidates (ofc-token--find-candidates prefix))
                 (when company-ofc-token--current-candidates
+                  (when (consp (cdr company-ofc-token--current-candidates)) ;; candidates size > 1
+                    (setq company-ofc-token--current-candidates
+                          (ofc-token--sort-candidate-list prefix (length prefix) company-ofc-token--current-candidates)))
                   prefix))))
     (candidates company-ofc-token--current-candidates)
     (match (get-text-property 0 :matched-region-list arg))
