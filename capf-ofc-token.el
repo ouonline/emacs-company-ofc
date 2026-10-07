@@ -2,7 +2,7 @@
 
 (require 'ofc-token "./ofc-token.el")
 
-(defun capf-ofc-token--completion-table (string predicate &ignored action)
+(defun capf-ofc-token--completion-table (string predicate _action)
   (ofc-token--find-candidates string predicate))
 
 (defun capf-ofc-token--get-annotation (candidate)
@@ -29,10 +29,10 @@
 (defun capf-ofc-token-init ()
   (ofc-token--after-buffer-created))
 
-(defun capf-ofc-token--try-completion (&ignored string collection predicate point)
+(defun capf-ofc-token--try-completion (_string _collection _predicate _point)
   (cons "" 0))
 
-(defun capf-ofc-token--all-completions (string collection predicate &ignored point)
+(defun capf-ofc-token--all-completions (string collection predicate _point)
   (let ((candidates (all-completions string collection predicate)))
     (when (and candidates
                (consp (cdr candidates)))

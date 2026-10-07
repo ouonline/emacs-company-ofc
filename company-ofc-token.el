@@ -5,7 +5,7 @@
 
 (defvar company-ofc-token--current-candidates '())
 
-(defun company-ofc-token (command &optional arg &rest ignored)
+(defun company-ofc-token (command &optional arg &rest _ignored)
   (interactive (list 'interactive))
   (cl-case command
     (init (ofc-token--after-buffer-created))

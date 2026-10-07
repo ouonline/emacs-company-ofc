@@ -59,8 +59,8 @@
                   (forward-char))))))))))
 
 (defun ofc-token--find-or-insert-token-hash (token buffer)
-  "finds or inserts an instance of `ofc-token--token-info-s' for the specified token in
- `ofc-token--token-hash' and returns that instance."
+  "Find or insert an instance of `ofc-token--token-info-s' for TOKEN in
+`ofc-token--token-hash', adding BUFFER, and return that instance."
   (let ((token-info (gethash token ofc-token--token-hash)))
     (unless token-info
       (setq token-info (make-ofc-token--token-info-s :token token :used-freq 0 :buffer-list '()))

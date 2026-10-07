@@ -6,7 +6,7 @@
 ;; (parent-dir . entry), updated when `prefix' is called
 (defvar company-ofc-path--prefix-info '())
 
-(defun company-ofc-path (command &optional arg &rest ignored)
+(defun company-ofc-path (command &optional arg &rest _ignored)
   (interactive (list 'interactive))
   (cl-case command
     (prefix (let ((info (ofc-path--grab-prefix)))
